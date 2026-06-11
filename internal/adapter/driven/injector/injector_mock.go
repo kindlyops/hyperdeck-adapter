@@ -54,3 +54,5 @@ func (m *Mock) OpenWindows() ([]domain.Window, error) {
 	}
 	return m.Windows, nil
 }
+
+var _ Injector = (*Mock)(nil)
