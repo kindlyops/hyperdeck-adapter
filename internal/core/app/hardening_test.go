@@ -19,6 +19,45 @@ func TestToggleStopEmitsPlayKey(t *testing.T) {
 	}
 }
 
+// vlcProfile models VLC: the play key (space) is a play/pause toggle, but there
+// is ALSO a discrete stop key (s). Play must suppress when already playing, and
+// Stop must use the discrete stop key rather than the toggle key.
+func vlcProfile() domain.Profile {
+	return domain.Profile{
+		ID:         "vlc",
+		Injection:  domain.InjectionBackground,
+		PlayToggle: true,
+		Keymap: domain.Keymap{
+			domain.KeyPlay: {Key: "space"},
+			domain.KeyStop: {Key: "s"},
+			domain.KeyNext: {Key: "n"},
+			domain.KeyPrev: {Key: "p"},
+		},
+	}
+}
+
+func TestVLCToggledPlayWithDiscreteStop(t *testing.T) {
+	m := injector.NewMock()
+	d := NewVirtualDeck(lockedSession(vlcProfile(), nil), m)
+	_ = d.Play() // stopped -> playing: sends space
+	_ = d.Play() // already playing: suppressed (no extra space, would pause VLC)
+	_ = d.Stop() // discrete stop key: sends "s", not the toggle key
+	got := sentKeys(m)
+	want := []string{"space", "s"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("vlc keys = %v, want %v", got, want)
+	}
+}
+
+func TestVLCStopWhenStoppedStillEmitsDiscreteStop(t *testing.T) {
+	m := injector.NewMock()
+	d := NewVirtualDeck(lockedSession(vlcProfile(), nil), m)
+	_ = d.Stop() // discrete stop is unconditional (harmless in VLC)
+	if got := sentKeys(m); len(got) != 1 || got[0] != "s" {
+		t.Errorf("discrete stop should always emit 's'; got %v", got)
+	}
+}
+
 func TestNextPrevClampAtBoundaries(t *testing.T) {
 	m := injector.NewMock()
 	s := lockedSession(discreteProfile(), domain.ClipList{{ID: 1}, {ID: 2}})

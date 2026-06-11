@@ -12,7 +12,7 @@ func TestKeyCode(t *testing.T) {
 	cases := map[string]uint16{
 		"space": 49, "n": 45, "p": 35, "s": 1,
 		"right": 124, "left": 123, "up": 126, "down": 125,
-		"enter": 36, "esc": 53,
+		"enter": 36, "esc": 53, ".": 47, "period": 47,
 	}
 	for key, want := range cases {
 		got, ok := keyCode(key)

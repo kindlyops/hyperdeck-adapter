@@ -3,7 +3,7 @@ profiles:
     match: { process: ["vlc.exe", "VLC"], title_regex: "VLC media player" }
     injection: background
     keymap: { play: "space", stop: "s", next: "n", prev: "p" }
-    play_stop_toggle: false
+    play_toggle: true
     clip_source: { type: playlist_file, path: "/tmp/playlist.m3u" }
     state: { type: title_regex, playing: ".+ - VLC" }
     homing: ["s"]
@@ -11,6 +11,6 @@ profiles:
     match: { process: ["Example Player"] }
     injection: focus
     keymap: { play: "space", next: "ctrl+right", prev: "ctrl+left" }
-    play_stop_toggle: true
+    play_toggle: true
     clip_source: { type: positional, count: 50 }
     state: { type: none }

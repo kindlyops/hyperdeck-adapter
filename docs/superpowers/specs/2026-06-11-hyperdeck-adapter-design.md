@@ -220,30 +220,28 @@ injection mode, clip source, state-detection rules, and homing sequence.
 ```yaml
 profiles:
   - id: vlc
-    match: { process: ["vlc.exe", "VLC"], title_regex: "VLC media player" }
-    injection: background
-    keymap:
+    match: { process: ["VLC", "vlc", "vlc.exe"], title_regex: "VLC media player" }
+    injection: background      # CGEventPostToPid; verified no focus-steal needed
+    keymap:                    # VLC macOS defaults (Windows VLC differs)
       play: "space"
-      stop: "s"
-      next: "n"
-      prev: "p"
-    toggle_keys: []          # keys that toggle rather than set a state
-    clip_source:
-      type: playlist_file
-      path: "${VLC_PLAYLIST}" # explicit path or watched folder
+      stop: "cmd+."
+      next: "cmd+right"
+      prev: "cmd+left"
+    play_toggle: true          # Space toggles play/pause; Stop uses the discrete cmd+.
+    clip_source: { type: positional, count: 50 }  # VLC has no live playlist file
     state:
       type: title_regex
-      playing: ".+ - VLC"     # best-effort current/playing detection
-    homing: ["s"]             # run on explicit Re-home only
+      playing: ".+ - VLC media player"  # best-effort current/playing detection
+    homing: ["cmd+."]         # run on explicit Re-home only
 
   - id: example_player
     match: { process: ["Example Player"] }
-    injection: focus
+    injection: background      # iOS-on-Mac app; CGEventPostToPid works backgrounded
     keymap:
       play: "space"
-      next: "ctrl+right"
-      prev: "ctrl+left"
-    toggle_keys: ["space"]    # Space toggles → modeled state decides emit
+      next: "cmd+right"        # macOS uses Command, not Ctrl
+      prev: "cmd+left"
+    play_toggle: true          # Space toggles; no discrete stop, so Stop pauses via Space
     clip_source: { type: positional, count: 50 }
     state: { type: none }
     homing: []
@@ -257,7 +255,7 @@ profiles:
       stop: "cmd+esc"          # Panic
       next: "cmd+down"
       prev: "cmd+up"
-    toggle_keys: []
+    play_toggle: false         # discrete play/stop keys
     clip_source: { type: mitti }
     state: { type: none }
     homing: []
@@ -270,11 +268,18 @@ log/config paths). The `ProfileStore` adapter loads and validates this YAML.
 
 ## Key behaviors
 
-- **Toggle semantics.** HyperDeck exposes discrete `play` and `stop`. Example Player
-  has only `Space` (toggle) and no stop. For a `toggle_key`, `VirtualDeck`
-  consults its modeled state and emits the key **only when the requested state
-  differs from the assumed state** (e.g. `play` while already modeled-playing
-  emits nothing). This is why modeled state is load-bearing.
+- **Toggle semantics.** HyperDeck exposes discrete `play` and `stop`, but many
+  players bind `Space` to a play/pause *toggle*. Two independent profile facts
+  capture this: `play_toggle` (the play key toggles) and whether a discrete `stop`
+  key is mapped.
+  - **`Play`** — when `play_toggle`, `VirtualDeck` emits the key **only when not
+    already modeled-playing** (re-pressing would pause); otherwise it emits
+    unconditionally.
+  - **`Stop`** — if a discrete `stop` key is mapped (VLC `s`, Mitti panic), emit
+    it; otherwise, when `play_toggle`, pause via the play key **only when
+    currently playing** (Example Player has no stop key).
+  This is why modeled state is load-bearing. Examples: VLC = `play_toggle` +
+  discrete stop; Example Player = `play_toggle`, no stop; Mitti = discrete both.
 - **Clip list.** VLC → parse the playlist for real clip names/count. Mitti →
   best-effort (proprietary format; may yield generic names). Example Player →
   `positional`: a fixed count of generic slots; `goto N` / `next` / `prev` become

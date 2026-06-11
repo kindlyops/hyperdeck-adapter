@@ -48,14 +48,14 @@ type StateConfig struct {
 
 // Profile is one player application's complete mapping definition.
 type Profile struct {
-	ID             string
-	Match          Match
-	Injection      InjectionMode
-	Keymap         Keymap
-	PlayStopToggle bool // when true, the play key toggles play/stop (e.g. Example Player Space)
-	ClipSource     ClipSourceConfig
-	State          StateConfig
-	Homing         []Chord
+	ID         string
+	Match      Match
+	Injection  InjectionMode
+	Keymap     Keymap
+	PlayToggle bool // when true, the play key toggles play/pause (e.g. Space in VLC/Example Player): Play suppresses when already playing, and Stop falls back to this key only when no discrete stop key is mapped
+	ClipSource ClipSourceConfig
+	State      StateConfig
+	Homing     []Chord
 }
 
 // MatchesWindow reports whether w belongs to this profile.

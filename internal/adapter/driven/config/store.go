@@ -36,7 +36,7 @@ type profileSchema struct {
 	Match     matchSchema       `yaml:"match"`
 	Injection string            `yaml:"injection"`
 	Keymap    map[string]string `yaml:"keymap"`
-	Toggle    bool              `yaml:"play_stop_toggle"`
+	Toggle    bool              `yaml:"play_toggle"`
 	Clip      clipSchema        `yaml:"clip_source"`
 	State     stateSchema       `yaml:"state"`
 	Homing    []string          `yaml:"homing"`
@@ -115,14 +115,14 @@ func convert(ps profileSchema) (domain.Profile, error) {
 		homing = append(homing, chord)
 	}
 	return domain.Profile{
-		ID:             ps.ID,
-		Match:          domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
-		Injection:      mode,
-		Keymap:         keymap,
-		PlayStopToggle: ps.Toggle,
-		ClipSource:     domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
-		State:          domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
-		Homing:         homing,
+		ID:         ps.ID,
+		Match:      domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
+		Injection:  mode,
+		Keymap:     keymap,
+		PlayToggle: ps.Toggle,
+		ClipSource: domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
+		State:      domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
+		Homing:     homing,
 	}, nil
 }
 

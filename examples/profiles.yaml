@@ -11,24 +11,33 @@ profiles:
   # Example Player on macOS is an iOS ("Designed for iPad") app; its window owner
   # name is "Example Player" (with a space). Verified on macOS: background injection
   # works (CGEventPostToPid), so transport control does not steal foreground
-  # focus. Space toggles play/pause (hence play_stop_toggle). next/prev use
-  # Command on macOS per Example Player's documented shortcuts.
+  # focus. Space toggles play/pause (hence play_toggle, and there is no discrete
+  # stop key so Stop pauses via Space). next/prev use Command on macOS per the player
+  # Library's documented shortcuts.
   - id: example_player
     match: { process: ["Example Player"] }
     injection: background
     keymap: { play: "space", next: "cmd+right", prev: "cmd+left" }
-    play_stop_toggle: true
+    play_toggle: true
     clip_source: { type: positional, count: 50 }
     state: { type: none }
 
-  # VLC has discrete transport keys and a real playlist.
+  # VLC: Space is a play/pause toggle (play_toggle), but 's' is a discrete stop,
+  # so Stop uses the discrete stop key. VLC does not persist its live playlist to
+  # a known file, so clips are positional slots driven by next/previous.
+  # Keys below are VLC's macOS defaults (verified): play/pause Space, next
+  # Command+Right, previous Command+Left, stop Command+. — Windows VLC uses
+  # different keys (e.g. n / p / s); set those in a Windows profile.
+  # Background injection (CGEventPostToPid) is confirmed working, so transport
+  # control does not steal foreground focus.
   - id: vlc
     match: { process: ["VLC", "vlc", "vlc.exe"], title_regex: "VLC media player" }
     injection: background
-    keymap: { play: "space", stop: "s", next: "n", prev: "p" }
-    clip_source: { type: playlist_file, path: "${VLC_PLAYLIST}" }
-    state: { type: title_regex, playing: ".+ - VLC" }
-    homing: ["s"]
+    keymap: { play: "space", stop: "cmd+.", next: "cmd+right", prev: "cmd+left" }
+    play_toggle: true
+    clip_source: { type: positional, count: 50 }
+    state: { type: title_regex, playing: ".+ - VLC media player" }
+    homing: ["cmd+."]
 
   # Mitti (macOS) has discrete cue transport keys; it needs foreground focus.
   - id: mitti
