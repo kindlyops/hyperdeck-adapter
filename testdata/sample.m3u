@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:123,Intro Clip
+/media/intro.mp4
+#EXTINF:200,Main Segment
+/media/main.mp4
