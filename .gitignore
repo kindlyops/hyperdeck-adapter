@@ -1,0 +1,8 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+# Local config
+/profiles.local.yaml
