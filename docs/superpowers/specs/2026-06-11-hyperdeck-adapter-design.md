@@ -375,11 +375,39 @@ practical.
 - **macOS permissions.** Synthetic input and window introspection require the
   Accessibility permission; the app must detect its absence and guide the user.
 
-## Open items for the implementation plan
+## Implementation status — macOS injector (done)
 
+The macOS injector driven adapter is implemented in cgo and verified on-device
+against Example Player (macOS 26):
+
+- **Enumeration** via `CGWindowListCopyWindowInfo` (owner name + pid; no Screen
+  Recording permission needed when matching by process). The owning pid is carried
+  in `Window.Handle` for later focus/targeting.
+- **Focus** via `NSRunningApplication activateWithOptions`.
+- **Keystrokes** via `CGEventCreateKeyboardEvent` + `CGEventPostToPid`, which
+  targets the owning process directly — this gives **background** injection (no
+  focus steal) as well as foreground. Reliable delivery required a focus-settle
+  delay, a key-hold delay, and a per-key flush delay (events posted too fast, or
+  just before a short-lived process exits, are dropped).
+- **Accessibility** is required to deliver synthesized events; `New` warns when
+  untrusted and `RequestAccessibility` prompts. `cmd/injcheck` is the on-device
+  diagnostic harness (list / focus / keys / bgkeys / trust).
+
+Findings worth recording: Example Player on Apple Silicon is an iOS ("Designed for
+iPad") app; its window owner name is `Example Player`, it accepts synthetic
+`CGEventPostToPid` keys **in the background**, `Space` toggles play/pause, and
+macOS uses Command (not Ctrl) for its next/prev shortcuts. See
+`examples/profiles.yaml`.
+
+## Open items
+
+- **Windows injector bodies** (`SendInput`/`PostMessage`/`EnumWindows`) — still
+  on-device stubs; implement and verify on Windows.
+- **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
+  (see Non-goals).
+- Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;
+  fine for background-mode profiles, but worth hoisting the focus to once-per-command
+  for focus-mode profiles if it feels sluggish.
 - Extract the exact HyperDeck command grammar and required identity/status fields
   from the HyperDeck product manual.
 - Confirm VLC playlist path/format handling and whether a watched folder is needed.
-- Confirm Mitti's best-effort clip-source approach (file parse vs. give up to
-  positional).
-- Choose and pin the systray, YAML, and property-testing libraries.

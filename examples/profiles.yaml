@@ -1,0 +1,44 @@
+# Example hyperdeck-adapter profiles.
+#
+# Copy to your OS config directory (default the adapter looks for):
+#   macOS:   ~/Library/Application Support/hyperdeck-adapter/profiles.yaml
+#   Windows: %AppData%\hyperdeck-adapter\profiles.yaml
+#
+# Tip: run `injcheck list <name>` to discover the exact window owner / process
+# name for a running app, then put that in match.process.
+
+profiles:
+  # Example Player on macOS is an iOS ("Designed for iPad") app; its window owner
+  # name is "Example Player" (with a space). Verified on macOS: background injection
+  # works (CGEventPostToPid), so transport control does not steal foreground
+  # focus. Space toggles play/pause (hence play_stop_toggle). next/prev use
+  # Command on macOS per Example Player's documented shortcuts.
+  - id: example_player
+    match: { process: ["Example Player"] }
+    injection: background
+    keymap: { play: "space", next: "cmd+right", prev: "cmd+left" }
+    play_stop_toggle: true
+    clip_source: { type: positional, count: 50 }
+    state: { type: none }
+
+  # VLC has discrete transport keys and a real playlist.
+  - id: vlc
+    match: { process: ["VLC", "vlc", "vlc.exe"], title_regex: "VLC media player" }
+    injection: background
+    keymap: { play: "space", stop: "s", next: "n", prev: "p" }
+    clip_source: { type: playlist_file, path: "${VLC_PLAYLIST}" }
+    state: { type: title_regex, playing: ".+ - VLC" }
+    homing: ["s"]
+
+  # Mitti (macOS) has discrete cue transport keys; it needs foreground focus.
+  - id: mitti
+    match: { process: ["Mitti"] }
+    injection: focus
+    keymap:
+      play: "enter"
+      pause: "space"
+      stop: "cmd+esc"
+      next: "cmd+down"
+      prev: "cmd+up"
+    clip_source: { type: mitti }
+    state: { type: none }
