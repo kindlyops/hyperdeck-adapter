@@ -1,6 +1,10 @@
 package injector
 
-import "github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
+import (
+	"sync"
+
+	"github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
+)
 
 // SentKeys records one SendKeys call.
 type SentKeys struct {
@@ -10,6 +14,7 @@ type SentKeys struct {
 
 // Mock is an in-memory KeyInjector + WindowEnumerator for tests.
 type Mock struct {
+	mu       sync.Mutex
 	Windows  []domain.Window // returned by OpenWindows
 	Focused  []domain.Window
 	Sent     []SentKeys
@@ -22,6 +27,8 @@ type Mock struct {
 func NewMock() *Mock { return &Mock{} }
 
 func (m *Mock) Focus(w domain.Window) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.FocusErr != nil {
 		return m.FocusErr
 	}
@@ -30,6 +37,8 @@ func (m *Mock) Focus(w domain.Window) error {
 }
 
 func (m *Mock) SendKeys(w domain.Window, chords []domain.Chord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.SendErr != nil {
 		return m.SendErr
 	}
@@ -38,6 +47,8 @@ func (m *Mock) SendKeys(w domain.Window, chords []domain.Chord) error {
 }
 
 func (m *Mock) OpenWindows() ([]domain.Window, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.EnumErr != nil {
 		return nil, m.EnumErr
 	}

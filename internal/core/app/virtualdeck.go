@@ -31,8 +31,11 @@ func (d *VirtualDeck) Play() error {
 	if !ok {
 		return ErrNotLocked
 	}
-	if p.PlayStopToggle && d.session.State() == domain.StatePlaying {
-		return nil
+	if p.PlayStopToggle {
+		if !d.session.SetStateIfChanged(domain.StatePlaying) {
+			return nil
+		}
+		return d.send(p, w, domain.KeyPlay)
 	}
 	d.session.SetState(domain.StatePlaying)
 	return d.send(p, w, domain.KeyPlay)
@@ -45,10 +48,9 @@ func (d *VirtualDeck) Stop() error {
 		return ErrNotLocked
 	}
 	if p.PlayStopToggle {
-		if d.session.State() != domain.StatePlaying {
+		if !d.session.SetStateIfChanged(domain.StateStopped) {
 			return nil
 		}
-		d.session.SetState(domain.StateStopped)
 		return d.send(p, w, domain.KeyPlay) // toggle shares the play key
 	}
 	d.session.SetState(domain.StateStopped)
@@ -65,12 +67,17 @@ func (d *VirtualDeck) Record() error {
 }
 
 // Goto navigates to a 1-based clip id via repeated next/prev keys.
+// With no clips, navigation is a no-op.
 func (d *VirtualDeck) Goto(clipID int) error {
 	p, w, ok := d.session.Active()
 	if !ok {
 		return ErrNotLocked
 	}
-	target := clamp(clipID, 1, max(1, d.session.Clips().Len()))
+	n := d.session.Clips().Len()
+	if n == 0 {
+		return nil
+	}
+	target := clamp(clipID, 1, n)
 	delta := target - d.session.CurrentClip()
 	key := domain.KeyNext
 	if delta < 0 {
@@ -118,11 +125,15 @@ func (d *VirtualDeck) step(key domain.KeyName, delta int) error {
 	if !ok {
 		return ErrNotLocked
 	}
-	n := clamp(d.session.CurrentClip()+delta, 1, max(1, d.session.Clips().Len()))
+	n := d.session.Clips().Len()
+	if n == 0 {
+		return nil
+	}
+	next := clamp(d.session.CurrentClip()+delta, 1, n)
 	if err := d.send(p, w, key); err != nil {
 		return err
 	}
-	d.session.SetCurrentClip(n)
+	d.session.SetCurrentClip(next)
 	return nil
 }
 

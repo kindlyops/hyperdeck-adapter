@@ -1,6 +1,9 @@
 package domain
 
-import "regexp"
+import (
+	"regexp"
+	"slices"
+)
 
 // KeyName is a logical transport action mapped to a chord by a profile.
 type KeyName string
@@ -57,14 +60,7 @@ type Profile struct {
 
 // MatchesWindow reports whether w belongs to this profile.
 func (p Profile) MatchesWindow(w Window) bool {
-	matched := false
-	for _, name := range p.Match.Process {
-		if name == w.Process {
-			matched = true
-			break
-		}
-	}
-	if !matched {
+	if !slices.Contains(p.Match.Process, w.Process) {
 		return false
 	}
 	if p.Match.TitleRegex == "" {

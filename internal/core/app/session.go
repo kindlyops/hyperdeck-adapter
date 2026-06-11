@@ -74,6 +74,20 @@ func (s *Session) SetState(st domain.TransportState) {
 	s.state = st
 }
 
+// SetStateIfChanged atomically sets the modeled state to want and reports
+// whether it differed from the previous state. Folding the read-modify-write
+// into one lock acquisition prevents two concurrent transport commands (or a
+// concurrent reconciler) from interleaving and making a wrong toggle decision.
+func (s *Session) SetStateIfChanged(want domain.TransportState) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == want {
+		return false
+	}
+	s.state = want
+	return true
+}
+
 func (s *Session) Clips() domain.ClipList {
 	s.mu.Lock()
 	defer s.mu.Unlock()
