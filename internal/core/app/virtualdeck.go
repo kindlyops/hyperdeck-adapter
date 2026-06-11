@@ -148,3 +148,38 @@ func clamp(v, lo, hi int) int {
 	}
 	return v
 }
+
+// TransportInfo reports the modeled transport state.
+func (d *VirtualDeck) TransportInfo() domain.TransportInfo {
+	speed := 0
+	if d.session.State() == domain.StatePlaying {
+		speed = 100
+	}
+	return domain.TransportInfo{
+		Status: d.session.State().HyperDeckStatus(),
+		Speed:  speed,
+		ClipID: d.session.CurrentClip(),
+		SlotID: 1,
+	}
+}
+
+// Clips returns the active clip list.
+func (d *VirtualDeck) Clips() domain.ClipList {
+	return d.session.Clips()
+}
+
+// SlotInfo reports a present slot when a player is locked.
+func (d *VirtualDeck) SlotInfo() domain.SlotInfo {
+	_, _, ok := d.session.Active()
+	return domain.SlotInfo{Present: ok, SlotID: 1}
+}
+
+// DeviceInfo reports the emulated deck identity.
+func (d *VirtualDeck) DeviceInfo() domain.DeviceInfo {
+	return d.device
+}
+
+var (
+	_ port.Transport = (*VirtualDeck)(nil)
+	_ port.Query     = (*VirtualDeck)(nil)
+)
