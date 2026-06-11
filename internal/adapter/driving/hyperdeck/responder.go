@@ -41,7 +41,9 @@ func (r *Responder) Handle(cmd Command) string {
 	case "device info":
 		return r.deviceInfo()
 	case "notify", "remote", "configuration":
-		return ack() // accepted; async emission handled by the server
+		// Subscription is acked, but asynchronous 5xx push notifications are not
+		// yet emitted (tracked as a deferred MVP item; see the design spec).
+		return ack()
 	case "quit":
 		return ack()
 	default:
@@ -54,11 +56,16 @@ func (r *Responder) handleGoto(cmd Command) string {
 	if !ok {
 		return fmt.Sprintf("%d syntax error\r\n", CodeSyntaxError)
 	}
-	id, err := strconv.Atoi(strings.TrimPrefix(idStr, "+"))
+	// strconv.Atoi accepts a leading '+' or '-'. A signed value is a relative
+	// offset from the current clip; an unsigned value is an absolute 1-based id.
+	n, err := strconv.Atoi(idStr)
 	if err != nil {
 		return fmt.Sprintf("%d syntax error\r\n", CodeSyntaxError)
 	}
-	return r.ackErr(r.transport.Goto(id))
+	if strings.HasPrefix(idStr, "+") || strings.HasPrefix(idStr, "-") {
+		n = r.query.TransportInfo().ClipID + n
+	}
+	return r.ackErr(r.transport.Goto(n))
 }
 
 func (r *Responder) transportInfo() string {

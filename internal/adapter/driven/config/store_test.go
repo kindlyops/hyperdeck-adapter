@@ -65,3 +65,15 @@ func TestLoadRejectsBadTitleRegex(t *testing.T) {
 		t.Fatal("expected validation error for invalid title_regex")
 	}
 }
+
+func TestLoadRejectsEmptyProcess(t *testing.T) {
+	_, err := loadBytes([]byte(`profiles:
+  - id: bad
+    match: { process: [] }
+    injection: focus
+    keymap: { play: "space" }
+`))
+	if err == nil {
+		t.Fatal("expected validation error for empty process list")
+	}
+}

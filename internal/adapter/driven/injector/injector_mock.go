@@ -55,4 +55,11 @@ func (m *Mock) OpenWindows() ([]domain.Window, error) {
 	return m.Windows, nil
 }
 
+// SentSnapshot returns a copy of the recorded SendKeys calls under the lock.
+func (m *Mock) SentSnapshot() []SentKeys {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]SentKeys(nil), m.Sent...)
+}
+
 var _ Injector = (*Mock)(nil)

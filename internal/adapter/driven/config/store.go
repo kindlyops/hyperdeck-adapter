@@ -82,6 +82,14 @@ func convert(ps profileSchema) (domain.Profile, error) {
 	if mode != domain.InjectionFocus && mode != domain.InjectionBackground {
 		return domain.Profile{}, fmt.Errorf("profile %q: invalid injection %q (want focus|background)", ps.ID, ps.Injection)
 	}
+	if len(ps.Match.Process) == 0 {
+		return domain.Profile{}, fmt.Errorf("profile %q: match.process must list at least one process name", ps.ID)
+	}
+	for _, name := range ps.Match.Process {
+		if name == "" {
+			return domain.Profile{}, fmt.Errorf("profile %q: match.process contains an empty entry", ps.ID)
+		}
+	}
 	if ps.Match.TitleRegex != "" {
 		if _, err := regexp.Compile(ps.Match.TitleRegex); err != nil {
 			return domain.Profile{}, fmt.Errorf("profile %q: invalid title_regex: %w", ps.ID, err)

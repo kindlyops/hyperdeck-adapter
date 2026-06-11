@@ -62,3 +62,43 @@ func TestRespondUnknownCommand(t *testing.T) {
 		t.Errorf("unknown command should be 1xx: %q", out)
 	}
 }
+
+func TestRespondGotoAbsolute(t *testing.T) {
+	d := newTestDeck() // current clip starts at 1, has 1 clip "Intro"
+	r := NewResponder(d, d)
+	out := r.Handle(Command{Name: "goto", Params: map[string]string{"clip id": "1"}})
+	if !strings.HasPrefix(out, "200 ok") {
+		t.Errorf("goto absolute = %q", out)
+	}
+}
+
+func TestRespondGotoRelativeUsesCurrentClip(t *testing.T) {
+	// Build a deck with 5 clips, current clip 3, so +2 -> 5 and -2 -> 1.
+	s := app.NewSession()
+	s.Lock(domain.Profile{
+		ID:        "vlc",
+		Injection: domain.InjectionBackground,
+		Keymap:    domain.Keymap{domain.KeyPlay: {Key: "space"}, domain.KeyNext: {Key: "n"}, domain.KeyPrev: {Key: "p"}},
+	}, domain.Window{}, nil, nil)
+	s.SetClips(domain.ClipList{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5}})
+	s.SetCurrentClip(3)
+	mock := injector.NewMock()
+	d := app.NewVirtualDeck(s, mock)
+	r := NewResponder(d, d)
+
+	out := r.Handle(Command{Name: "goto", Params: map[string]string{"clip id": "+2"}})
+	if !strings.HasPrefix(out, "200 ok") {
+		t.Fatalf("goto +2 = %q", out)
+	}
+	if s.CurrentClip() != 5 {
+		t.Errorf("goto +2 from 3 should land on 5, got %d", s.CurrentClip())
+	}
+
+	out = r.Handle(Command{Name: "goto", Params: map[string]string{"clip id": "-2"}})
+	if !strings.HasPrefix(out, "200 ok") {
+		t.Fatalf("goto -2 = %q", out)
+	}
+	if s.CurrentClip() != 3 {
+		t.Errorf("goto -2 from 5 should land on 3, got %d", s.CurrentClip())
+	}
+}

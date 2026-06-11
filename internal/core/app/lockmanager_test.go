@@ -57,8 +57,8 @@ func TestLockManagerUnlocksWhenGone(t *testing.T) {
 
 func vlcProfileForLock() domain.Profile {
 	return domain.Profile{
-		ID:    "vlc",
-		Match: domain.Match{Process: []string{"vlc.exe"}, TitleRegex: "VLC media player"},
+		ID:     "vlc",
+		Match:  domain.Match{Process: []string{"vlc.exe"}, TitleRegex: "VLC media player"},
 		Keymap: domain.Keymap{domain.KeyPlay: {Key: "space"}},
 	}
 }

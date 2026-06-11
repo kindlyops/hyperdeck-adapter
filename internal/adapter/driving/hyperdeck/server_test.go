@@ -53,8 +53,9 @@ func TestServerEndToEnd(t *testing.T) {
 	}
 	// Allow the handler goroutine to record the keystroke.
 	time.Sleep(50 * time.Millisecond)
-	if len(mock.Sent) != 1 || mock.Sent[0].Chords[0].Key != "space" {
-		t.Errorf("expected space keystroke, got %+v", mock.Sent)
+	sent := mock.SentSnapshot()
+	if len(sent) != 1 || sent[0].Chords[0].Key != "space" {
+		t.Errorf("expected space keystroke, got %+v", sent)
 	}
 }
 
