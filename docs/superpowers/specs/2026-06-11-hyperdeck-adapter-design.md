@@ -35,6 +35,13 @@ detection** (e.g. window-title parsing) where a profile defines how.
 - mDNS/Bonjour auto-advertisement. Controllers add the deck by IP for MVP.
 - Multiple simultaneous virtual decks. Exactly one app, one deck.
 - True closed-loop state sync. State is modeled + best-effort, never authoritative.
+- **Asynchronous `5xx` push notifications.** The `notify:` subscription command is
+  acknowledged, but the deck does not yet emit unsolicited `5xx` transport/slot/
+  configuration-change messages — controllers must poll `transport info` /
+  `slot info`. Async push is the **top follow-up** to implement before live ATEM /
+  hardware-remote fidelity testing, since those controllers rely on it to keep
+  their UI current. (Deferred consciously; the responder no longer claims to emit
+  it.)
 
 ## Requirements (from brainstorming)
 
