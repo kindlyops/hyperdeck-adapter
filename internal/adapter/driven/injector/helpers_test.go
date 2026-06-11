@@ -1,3 +1,5 @@
+//go:build !windows && !darwin
+
 package injector
 
 import "github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
