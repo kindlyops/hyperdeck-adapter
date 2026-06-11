@@ -31,7 +31,8 @@ func (d *VirtualDeck) Play() error {
 	if !ok {
 		return ErrNotLocked
 	}
-	if p.PlayStopToggle {
+	if p.PlayToggle {
+		// The play key toggles play/pause; emit it only when not already playing.
 		if !d.session.SetStateIfChanged(domain.StatePlaying) {
 			return nil
 		}
@@ -47,14 +48,20 @@ func (d *VirtualDeck) Stop() error {
 	if !ok {
 		return ErrNotLocked
 	}
-	if p.PlayStopToggle {
+	if _, hasStop := p.Keymap[domain.KeyStop]; hasStop {
+		// Discrete stop key (e.g. VLC 's', Mitti panic): always fire it.
+		d.session.SetState(domain.StateStopped)
+		return d.send(p, w, domain.KeyStop)
+	}
+	if p.PlayToggle {
+		// No discrete stop key: pause via the toggle play key, only when playing.
 		if !d.session.SetStateIfChanged(domain.StateStopped) {
 			return nil
 		}
-		return d.send(p, w, domain.KeyPlay) // toggle shares the play key
+		return d.send(p, w, domain.KeyPlay)
 	}
 	d.session.SetState(domain.StateStopped)
-	return d.send(p, w, domain.KeyStop)
+	return nil
 }
 
 // Record sends the record key if the profile defines one; otherwise no-op.

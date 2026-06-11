@@ -39,9 +39,9 @@ func discreteProfile() domain.Profile {
 
 func toggleProfile() domain.Profile {
 	return domain.Profile{
-		ID:             "example",
-		Injection:      domain.InjectionFocus,
-		PlayStopToggle: true,
+		ID:         "example",
+		Injection:  domain.InjectionFocus,
+		PlayToggle: true,
 		Keymap: domain.Keymap{
 			domain.KeyPlay: {Key: "space"},
 			domain.KeyNext: {Key: "right", Mods: []domain.Modifier{domain.ModCtrl}},

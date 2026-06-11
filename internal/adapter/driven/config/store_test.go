@@ -22,8 +22,8 @@ func TestLoadProfiles(t *testing.T) {
 		t.Errorf("vlc next key = %+v", vlc.Keymap[domain.KeyNext])
 	}
 	example := profiles[1]
-	if !example.PlayStopToggle {
-		t.Error("example should be play_stop_toggle")
+	if !example.PlayToggle {
+		t.Error("example should be play_toggle")
 	}
 	if example.Keymap[domain.KeyNext].Key != "right" || len(example.Keymap[domain.KeyNext].Mods) != 1 {
 		t.Errorf("example next chord = %+v", example.Keymap[domain.KeyNext])
