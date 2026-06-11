@@ -6,3 +6,10 @@ type Window struct {
 	Title   string
 	Process string
 }
+
+// LockState is the current player-lock status.
+type LockState struct {
+	Locked  bool
+	Profile *Profile
+	Window  Window
+}
