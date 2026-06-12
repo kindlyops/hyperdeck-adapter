@@ -32,21 +32,21 @@ cross:
     GOOS=windows GOARCH=amd64 go build ./...
     GOOS=linux   GOARCH=amd64 go build ./...
 
-# (macOS) trigger / check the Accessibility permission for bin/injcheck
+# (macOS) trigger / check the input (Accessibility) permission for the adapter
 trust: build
-    ./bin/injcheck trust
+    ./bin/hyperdeck-adapter -check-accessibility
 
 # list on-screen windows (optionally filtered): `just list vlc`
 list filter="": build
     ./bin/injcheck list {{filter}}
 
-# run the adapter pipeline in the foreground (no tray), locking onto a running player
+# run the adapter pipeline in the foreground (headless, no tray), locking onto a running player
 serve: build
-    ./bin/injcheck serve {{profiles}} {{bind}}
+    ./bin/hyperdeck-adapter -no-tray -config {{profiles}} -bind {{bind}}
 
-# stop any background adapter (serve) process
+# stop any background headless adapter
 stop:
-    -pkill -f 'injcheck serve'
+    -pkill -f 'hyperdeck-adapter -no-tray'
 
 # run the real tray application (needs its own Accessibility grant on macOS)
 run: build
@@ -57,15 +57,15 @@ demo: build
     #!/usr/bin/env bash
     set -euo pipefail
     BIND="{{bind}}"; HOST="${BIND%:*}"; PORT="${BIND##*:}"
-    if ! ./bin/injcheck trust >/dev/null 2>&1; then
-      echo "⚠️  Accessibility not granted for $(pwd)/bin/injcheck"
+    if ! ./bin/hyperdeck-adapter -check-accessibility >/dev/null 2>&1; then
+      echo "⚠️  Input permission not granted for $(pwd)/bin/hyperdeck-adapter"
       echo "    Enable it in System Settings → Privacy & Security → Accessibility,"
       echo "    then re-run 'just demo'. (Opening the prompt now…)"
-      ./bin/injcheck trust || true
+      ./bin/hyperdeck-adapter -check-accessibility || true
       exit 1
     fi
     echo "▶ starting adapter on ${BIND} (locks onto a running player)…"
-    ./bin/injcheck serve {{profiles}} "${BIND}" >/tmp/hda-serve.log 2>&1 &
+    ./bin/hyperdeck-adapter -no-tray -config {{profiles}} -bind "${BIND}" >/tmp/hda-serve.log 2>&1 &
     SERVE=$!
     trap 'kill "${SERVE}" 2>/dev/null || true' EXIT
     for _ in $(seq 1 25); do nc -z "${HOST}" "${PORT}" 2>/dev/null && break; sleep 0.2; done

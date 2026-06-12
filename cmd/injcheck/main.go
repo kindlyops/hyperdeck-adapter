@@ -5,22 +5,12 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/clipsource"
-	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/clock"
-	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/config"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/injector"
-	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/stateprobe"
-	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driving/hyperdeck"
-	"github.com/kindlyops/hyperdeck-adapter/internal/core/app"
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
-	"github.com/kindlyops/hyperdeck-adapter/internal/core/port"
 )
 
 func main() {
@@ -58,10 +48,6 @@ func main() {
 			usage()
 		}
 		keys(inj, mustPID(os.Args[2]), os.Args[3:], false)
-	case "serve":
-		// Run the real adapter pipeline (protocol server -> core -> injector),
-		// reusing this binary's Accessibility grant. No tray.
-		serve(inj, arg(2, "examples/profiles.yaml"), arg(3, "127.0.0.1:9993"))
 	default:
 		usage()
 	}
@@ -113,50 +99,6 @@ func keys(inj injector.Injector, pid int, specs []string, focus bool) {
 		mode = "foreground"
 	}
 	fmt.Printf("sent %d chord(s) to pid %d (%s): %v\n", len(chords), pid, mode, specs)
-}
-
-// logPresenter implements port.StatusPresenter by logging lock changes.
-type logPresenter struct{}
-
-func (logPresenter) Present(l domain.LockState) {
-	if l.Locked && l.Profile != nil {
-		log.Printf("LOCKED onto %q (window %q)", l.Profile.ID, l.Window.Title)
-	} else {
-		log.Printf("UNLOCKED (no player)")
-	}
-}
-
-// serve wires the real adapter pipeline and runs it without a tray.
-func serve(inj injector.Injector, profilePath, bind string) {
-	profiles, err := config.NewStore(profilePath).Load()
-	if err != nil {
-		fail("load config %q: %v", profilePath, err)
-	}
-	session := app.NewSession()
-	deck := app.NewVirtualDeck(session, inj)
-	lm := app.NewLockManager(session, inj, profiles, logPresenter{},
-		func(p domain.Profile) port.ClipSource { return clipsource.New(p) },
-		func(p domain.Profile) port.StateProbe { return stateprobe.New(p) })
-	rec := app.NewReconciler(session)
-	srv := hyperdeck.NewServer(deck, deck)
-
-	ln, err := net.Listen("tcp", bind)
-	if err != nil {
-		fail("listen %s: %v", bind, err)
-	}
-	lm.Poll() // lock immediately if a player is already running
-	go func() { _ = srv.Serve(ln) }()
-	go lm.Run(clock.New(), time.Second)
-	go rec.Run(clock.New(), time.Second)
-	log.Printf("hyperdeck-adapter serving on %s (profiles: %d)", bind, len(profiles))
-	select {} // block forever
-}
-
-func arg(i int, def string) string {
-	if len(os.Args) > i {
-		return os.Args[i]
-	}
-	return def
 }
 
 func mustPID(s string) int {
