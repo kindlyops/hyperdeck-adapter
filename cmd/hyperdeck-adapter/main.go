@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -27,7 +28,8 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", defaultConfigPath(), "path to profiles.yaml")
+	dfltConfig := defaultConfigPath()
+	configPath := flag.String("config", dfltConfig, "path to profiles.yaml")
 	bind := flag.String("bind", "0.0.0.0:9993", "TCP listen address")
 	interval := flag.Duration("poll", time.Second, "lock/reconcile poll interval")
 	noTray := flag.Bool("no-tray", false, "run headless: log status instead of showing the system tray")
@@ -41,6 +43,18 @@ func main() {
 		}
 		slog.Error("input permission not granted; enable this binary under the OS input/accessibility settings")
 		os.Exit(1)
+	}
+
+	// First-run convenience: when relying on the default location, seed it with
+	// the bundled example profiles so a bare run works without manual setup. An
+	// explicit -config path is left untouched — a missing file there is an error.
+	if *configPath == dfltConfig {
+		if created, err := config.EnsureDefault(*configPath); err != nil {
+			slog.Error("seed default config", "err", err)
+			os.Exit(1)
+		} else if created {
+			slog.Info("wrote default config", "path", *configPath)
+		}
 	}
 
 	profiles, err := config.NewStore(*configPath).Load()
@@ -134,5 +148,5 @@ func defaultConfigPath() string {
 	if err != nil {
 		return "profiles.yaml"
 	}
-	return dir + "/hyperdeck-adapter/profiles.yaml"
+	return filepath.Join(dir, "hyperdeck-adapter", "profiles.yaml")
 }
