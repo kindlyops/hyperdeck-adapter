@@ -158,9 +158,13 @@ jobs:
         run: |
           choco install nsis -y --no-progress
           New-Item -ItemType Directory -Force dist | Out-Null
+          # VIProductVersion must be numeric x.x.x.x: drop any prerelease suffix.
+          $viversion = $env:VERSION -replace '-.*$', ''
           $out = "dist\hyperdeck-adapter_${env:VERSION}_windows_amd64-setup.exe"
-          & "C:\Program Files (x86)\NSIS\makensis.exe" `
-            "/DVERSION=$env:VERSION" "/DOUTFILE=$out" build\windows\installer.nsi
+          # /NOCD keeps makensis in the repo root so relative paths resolve.
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /NOCD `
+            "/DVERSION=$env:VERSION" "/DVIVERSION=$viversion" "/DOUTFILE=$out" build\windows\installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit $LASTEXITCODE" }
       - name: Sign installer (no-op until secrets exist)
         shell: pwsh
         env:
