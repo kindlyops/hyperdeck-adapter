@@ -91,3 +91,18 @@ window.addEventListener('keydown', (ev: KeyboardEvent) => {
     }
   }
 });
+
+// Mobile-friendly trigger: tap (or activate) the footer hint — no keyboard needed.
+const eggTrigger = document.getElementById('egg-trigger');
+if (eggTrigger) {
+  eggTrigger.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    void triggerEgg();
+  });
+  eggTrigger.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      void triggerEgg();
+    }
+  });
+}

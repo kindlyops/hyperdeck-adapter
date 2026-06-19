@@ -301,8 +301,14 @@ function buildSculpture(renderer: WebGLRenderer): Sculpture {
   const scene = new Scene();
   scene.background = new Color(BG);
 
-  const camera = new PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 60);
-  camera.position.set(0, 1.9, 12.5);
+  const fov = 45;
+  const aspect = window.innerWidth / window.innerHeight;
+  const camera = new PerspectiveCamera(fov, aspect, 0.1, 80);
+  // Distance that fits the sculpture (incl. labels) in both axes — so it doesn't
+  // overflow narrow portrait phones, where the limiting factor is width.
+  const t = Math.tan((fov * Math.PI) / 180 / 2);
+  const dist = Math.min(34, Math.max(2.8 / t, 5.8 / (t * aspect)) * 1.08);
+  camera.position.set(0, 1.5, dist);
 
   scene.add(new AmbientLight(0x2a3a52, 0.4));
   const rimA = new DirectionalLight(0x9fe6c0, 1.4);
@@ -387,7 +393,9 @@ function buildSculpture(renderer: WebGLRenderer): Sculpture {
   controls.dampingFactor = 0.06;
   controls.enablePan = false;
   controls.minDistance = 4;
-  controls.maxDistance = 18;
+  // Must exceed the fitted start distance, or OrbitControls clamps the camera
+  // back in and the sculpture overflows narrow (portrait) viewports.
+  controls.maxDistance = Math.max(20, dist + 6);
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.6;
   controls.target.set(0, 0, 0);
