@@ -480,8 +480,8 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
     appropriate for live-event cueing. Modeled via the profile flag
     `cue_on_navigate: true`: next/prev/goto leave the deck stopped/cued so a
     subsequent transport `play` fires to start the cued clip (without it the deck
-    would still be modeled as playing and `play` would be suppressed). The the player
-    Library example profiles set it.
+    would still be modeled as playing and `play` would be suppressed). The
+    Example Player example profiles set it.
 - **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
   (see Non-goals).
 - Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;

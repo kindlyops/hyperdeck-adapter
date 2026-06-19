@@ -12,8 +12,8 @@ profiles:
   # name is "Example Player" (with a space). Verified on macOS: background injection
   # works (CGEventPostToPid), so transport control does not steal foreground
   # focus. Space toggles play/pause (hence play_toggle, and there is no discrete
-  # stop key so Stop pauses via Space). next/prev use Command on macOS per the player
-  # Library's documented shortcuts.
+  # stop key so Stop pauses via Space). next/prev use Command on macOS per
+  # Example Player's documented shortcuts.
   - id: example_player
     match: { process: ["Example Player"] }
     injection: background
@@ -34,7 +34,7 @@ profiles:
   # control is a UIA element we Invoke() by AutomationId. (Invoking does bring the player
   # to the foreground; that's a UWP property, not avoidable.) The window is matched
   # on the focusable frame: ApplicationFrameHost.exe + title_regex "Example Player".
-  # AutomationIds below are Example Player's player buttons (verified on Windows:
+  # AutomationIds below are Example Player's transport buttons (verified on Windows:
   # TogglePlaybackButton toggles play/pause, PlayNextButton / PlayPreviousButton
   # step the playlist). No discrete stop button, so Stop pauses via the toggle.
   - id: example_player_windows
