@@ -141,3 +141,56 @@ func TestCommandsWithoutLockError(t *testing.T) {
 		t.Errorf("expected ErrNotLocked, got %v", err)
 	}
 }
+
+// cueModeProfile models Example Player in playlist "pause" (cue) mode: a toggle play
+// key plus cue_on_navigate, so navigating cues the clip paused.
+func cueModeProfile() domain.Profile {
+	p := toggleProfile()
+	p.ID = "example"
+	p.CueOnNavigate = true
+	return p
+}
+
+func TestCueOnNavigateLeavesDeckStoppedSoPlayStarts(t *testing.T) {
+	m := injector.NewMock()
+	s := lockedSession(cueModeProfile(), domain.ClipList{{ID: 1}, {ID: 2}, {ID: 3}})
+	d := NewVirtualDeck(s, m)
+	_ = d.Play() // stopped -> playing: space
+	_ = d.Next() // navigates (ctrl+right) and cues paused -> state goes stopped
+	if s.State() != domain.StateStopped {
+		t.Fatalf("cue_on_navigate: Next should leave the deck cued/stopped, got %v", s.State())
+	}
+	_ = d.Play() // stopped -> playing again: must re-emit space to start the cued clip
+	got := sentKeys(m)
+	want := []string{"space", "right", "space"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("keys = %v, want %v", got, want)
+	}
+}
+
+func TestWithoutCueOnNavigatePlayStaysSuppressed(t *testing.T) {
+	m := injector.NewMock()
+	s := lockedSession(toggleProfile(), domain.ClipList{{ID: 1}, {ID: 2}, {ID: 3}})
+	d := NewVirtualDeck(s, m)
+	_ = d.Play() // space
+	_ = d.Next() // right; no cue, state stays playing
+	_ = d.Play() // suppressed: already modeled as playing
+	got := sentKeys(m)
+	want := []string{"space", "right"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("without cue_on_navigate, second Play should be suppressed; keys = %v, want %v", got, want)
+	}
+}
+
+func TestCueOnNavigateGotoAlsoCues(t *testing.T) {
+	m := injector.NewMock()
+	s := lockedSession(cueModeProfile(), domain.ClipList{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}})
+	d := NewVirtualDeck(s, m)
+	s.SetState(domain.StatePlaying)
+	if err := d.Goto(3); err != nil {
+		t.Fatal(err)
+	}
+	if s.State() != domain.StateStopped {
+		t.Errorf("cue_on_navigate: Goto should leave the deck cued/stopped, got %v", s.State())
+	}
+}

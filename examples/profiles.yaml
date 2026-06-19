@@ -19,6 +19,11 @@ profiles:
     injection: background
     keymap: { play: "space", next: "cmd+right", prev: "cmd+left" }
     play_toggle: true
+    # Example Player's playlist default action can be set to "pause" (cue mode), so
+    # next/prev/goto cue a clip paused rather than playing it. cue_on_navigate
+    # models that: navigation leaves the deck stopped and a separate Play (Space)
+    # starts the cued clip — the live-event cueing workflow.
+    cue_on_navigate: true
     clip_source: { type: positional, count: 50 }
     state: { type: none }
 
@@ -39,6 +44,7 @@ profiles:
     injection: focus
     keymap: { play: "space", next: "ctrl+right", prev: "ctrl+left" }
     play_toggle: true
+    cue_on_navigate: true # playlist "pause" mode: navigation cues paused; Play starts it
     clip_source: { type: positional, count: 50 }
     state: { type: none }
 

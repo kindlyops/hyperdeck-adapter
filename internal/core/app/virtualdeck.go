@@ -113,6 +113,7 @@ func (d *VirtualDeck) Goto(clipID int) error {
 		}
 	}
 	d.session.SetCurrentClip(target)
+	d.cueIfNavigatePauses(p)
 	return nil
 }
 
@@ -168,7 +169,17 @@ func (d *VirtualDeck) step(key domain.KeyName, delta int) error {
 		return err
 	}
 	d.session.SetCurrentClip(next)
+	d.cueIfNavigatePauses(p)
 	return nil
+}
+
+// cueIfNavigatePauses models the cued/paused state that profiles like Example Player
+// (playlist "pause" mode) leave a clip in after navigating to it: the clip is
+// cued, not playing, so a subsequent Play must fire the play key to start it.
+func (d *VirtualDeck) cueIfNavigatePauses(p domain.Profile) {
+	if p.CueOnNavigate {
+		d.session.SetState(domain.StateStopped)
+	}
 }
 
 func (d *VirtualDeck) send(p domain.Profile, w domain.Window, key domain.KeyName) error {

@@ -39,6 +39,7 @@ type profileSchema struct {
 	API       apiSchema         `yaml:"api"`
 	Keymap    map[string]string `yaml:"keymap"`
 	Toggle    bool              `yaml:"play_toggle"`
+	CueNav    bool              `yaml:"cue_on_navigate"`
 	Clip      clipSchema        `yaml:"clip_source"`
 	State     stateSchema       `yaml:"state"`
 	Homing    []string          `yaml:"homing"`
@@ -138,16 +139,17 @@ func convert(ps profileSchema) (domain.Profile, error) {
 		homing = append(homing, chord)
 	}
 	return domain.Profile{
-		ID:         ps.ID,
-		Match:      domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
-		Control:    control,
-		Injection:  mode,
-		API:        api,
-		Keymap:     keymap,
-		PlayToggle: ps.Toggle,
-		ClipSource: domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
-		State:      domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
-		Homing:     homing,
+		ID:            ps.ID,
+		Match:         domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
+		Control:       control,
+		Injection:     mode,
+		API:           api,
+		Keymap:        keymap,
+		PlayToggle:    ps.Toggle,
+		CueOnNavigate: ps.CueNav,
+		ClipSource:    domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
+		State:         domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
+		Homing:        homing,
 	}, nil
 }
 
