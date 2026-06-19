@@ -22,6 +22,26 @@ profiles:
     clip_source: { type: positional, count: 50 }
     state: { type: none }
 
+  # Example Player on Windows is a UWP (Store) app. Its visible window is split:
+  # the content is a "Windows.UI.Core.CoreWindow" owned by ExamplePlayer.exe, but the
+  # focusable top-level frame ("ApplicationFrameWindow") is owned by
+  # ApplicationFrameHost.exe. SetForegroundWindow only works on the frame, so this
+  # profile matches ApplicationFrameHost.exe + title_regex "Example Player" (matching
+  # ExamplePlayer.exe would select a CoreWindow that cannot be brought foreground).
+  # Keys are Example Player's documented Windows player shortcuts
+  # (example.com/en/online-help/uwp-player/player-shortcuts): play/pause Space, next
+  # Ctrl+Right, previous Ctrl+Left; no discrete stop (Space toggles, so Stop pauses
+  # via Space). next/prev are modified chords, delivered via SendInput after Focus
+  # (injection: focus). NOTE: enumeration + focus verified on Windows; live
+  # transport not yet confirmed (test app was stuck on its first-run splash).
+  - id: example_player_windows
+    match: { process: ["ApplicationFrameHost.exe"], title_regex: "Example Player" }
+    injection: focus
+    keymap: { play: "space", next: "ctrl+right", prev: "ctrl+left" }
+    play_toggle: true
+    clip_source: { type: positional, count: 50 }
+    state: { type: none }
+
   # VLC: Space is a play/pause toggle (play_toggle), but 's' is a discrete stop,
   # so Stop uses the discrete stop key. VLC does not persist its live playlist to
   # a known file, so clips are positional slots driven by next/previous.
