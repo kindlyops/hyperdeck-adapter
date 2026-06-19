@@ -68,3 +68,49 @@ type noProbe struct{}
 func (noProbe) Detect(domain.Window) (domain.TransportState, bool) {
 	return domain.StateStopped, false
 }
+
+func TestLockManagerPinnedMatchesOnlyActive(t *testing.T) {
+	m := injector.NewMock()
+	m.Windows = []domain.Window{
+		{Process: "vlc.exe", Title: "x - VLC media player"},
+		{Process: "Mitti", Title: "Mitti"},
+	}
+	s := NewSession()
+	pres := &fakePresenter{}
+	profiles := []domain.Profile{vlcProfileForLock(), mittiProfileForLock()}
+	lm := NewLockManager(s, m, profiles, pres,
+		func(domain.Profile) port.ClipSource { return fakeClipSource{} },
+		func(domain.Profile) port.StateProbe { return noProbe{} })
+
+	lm.SetActive("mitti") // pins mitti even though vlc also matches; triggers Poll
+
+	p, _, ok := s.Active()
+	if !ok || p.ID != "mitti" {
+		t.Fatalf("expected mitti locked, got ok=%v id=%q", ok, p.ID)
+	}
+}
+
+func TestLockManagerPinnedNotRunningStaysUnlocked(t *testing.T) {
+	m := injector.NewMock()
+	m.Windows = []domain.Window{{Process: "vlc.exe", Title: "x - VLC media player"}}
+	s := NewSession()
+	pres := &fakePresenter{}
+	profiles := []domain.Profile{vlcProfileForLock(), mittiProfileForLock()}
+	lm := NewLockManager(s, m, profiles, pres,
+		func(domain.Profile) port.ClipSource { return fakeClipSource{} },
+		func(domain.Profile) port.StateProbe { return noProbe{} })
+
+	lm.SetActive("mitti") // mitti is not in the window list
+
+	if _, _, ok := s.Active(); ok {
+		t.Error("expected unlocked when the pinned profile is not running")
+	}
+}
+
+func mittiProfileForLock() domain.Profile {
+	return domain.Profile{
+		ID:     "mitti",
+		Match:  domain.Match{Process: []string{"Mitti"}},
+		Keymap: domain.Keymap{domain.KeyPlay: {Key: "enter"}},
+	}
+}
