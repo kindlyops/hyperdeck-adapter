@@ -32,8 +32,8 @@ profiles:
   # (example.com/en/online-help/uwp-player/player-shortcuts): play/pause Space, next
   # Ctrl+Right, previous Ctrl+Left; no discrete stop (Space toggles, so Stop pauses
   # via Space). next/prev are modified chords, delivered via SendInput after Focus
-  # (injection: focus). NOTE: enumeration + focus verified on Windows; live
-  # transport not yet confirmed (test app was stuck on its first-run splash).
+  # (injection: focus). Verified on Windows: focus, play/pause (Space), and
+  # playlist next/prev (Ctrl+Right/Left) all drive a playing Example Player playlist.
   - id: example_player_windows
     match: { process: ["ApplicationFrameHost.exe"], title_regex: "Example Player" }
     injection: focus

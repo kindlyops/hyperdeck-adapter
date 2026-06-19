@@ -439,8 +439,8 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
   - **Verified live:** ran the real adapter headless against running VLC and drove
     it over the HyperDeck TCP protocol — `play`→playing, `goto`→track changes via
     next/prev, `stop`→stopped, each confirmed through VLC's HTTP `status.json`.
-- **Example Player on Windows (UWP)** — profile `example_player_windows` added; enumeration
-  and focus verified, **live transport not yet confirmed.** Findings:
+- **Example Player on Windows (UWP)** — profile `example_player_windows` added and
+  **verified end-to-end on Windows.** Findings:
   - Example Player is a UWP/Store app with a split window: content is a
     `Windows.UI.Core.CoreWindow` owned by `ExamplePlayer.exe`, but the focusable
     top-level frame is an `ApplicationFrameWindow` owned by
@@ -449,13 +449,18 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
   - So the profile matches `process: ["ApplicationFrameHost.exe"]` +
     `title_regex: "Example Player"` (matching `ExamplePlayer.exe` would select a CoreWindow
     that can't be brought foreground). General lesson for UWP players.
-  - Documented Windows player shortcuts
-    (example.com/en/online-help/uwp-player/player-shortcuts): play/pause `Space`,
-    next `Ctrl+Right`, prev `Ctrl+Left`, no discrete stop. next/prev are *modified*
-    chords → delivered via `SendInput` after `Focus` (`injection: focus`).
-  - **Blocked:** the test machine's Example Player is a fresh install stuck on its
-    first-run splash; it never reached playable media, so Space/next/prev were not
-    live-verified. Re-run once the app has content and a clip loaded.
+  - Windows player shortcuts (example.com/en/online-help/uwp-player/player-shortcuts):
+    play/pause `Space`, next `Ctrl+Right`, prev `Ctrl+Left`, no discrete stop.
+    next/prev are *modified* chords → delivered via `SendInput` after `Focus`
+    (`injection: focus`).
+  - **Verified live** against a Example Player playlist (observed via screenshots):
+    focus brings the frame foreground; injected `Space` toggles play↔pause
+    (frame-diff 18→0→20→0); injected `Ctrl+Right`/`Ctrl+Left` step playlist items
+    forward/back (109 → 01 JWST → clip 3 and back).
+  - Note on Example Player config: its playlist default action can be set to "pause"
+    (cue mode) so advancing to an item cues it paused rather than auto-playing —
+    appropriate for live-event cueing, where each item is cued then played on
+    call. The test playlist used this mode.
 - **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
   (see Non-goals).
 - Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;
