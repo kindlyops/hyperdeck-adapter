@@ -33,6 +33,7 @@ func (t *Tray) Present(lock domain.LockState) {
 	if t.statusItm != nil {
 		t.statusItm.SetTitle(statusText(lock))
 	}
+	systray.SetIcon(lockIcon(lock.Locked))
 	if lock.Locked {
 		systray.SetTitle("HD●")
 	} else {
@@ -46,11 +47,12 @@ func (t *Tray) Run() {
 }
 
 func (t *Tray) onReady() {
-	systray.SetTitle("HD○")
-	systray.SetTooltip("HyperDeck Adapter")
 	t.mu.Lock()
 	last := t.last
 	t.mu.Unlock()
+	systray.SetIcon(lockIcon(last.Locked))
+	systray.SetTitle("HD○")
+	systray.SetTooltip("HyperDeck Adapter")
 	t.statusItm = systray.AddMenuItem(statusText(last), "Player lock status")
 	t.statusItm.Disable()
 	systray.AddSeparator()
