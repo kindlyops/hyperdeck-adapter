@@ -51,6 +51,42 @@ func TestLoadAPIProfile(t *testing.T) {
 	}
 }
 
+func TestLoadUIAProfile(t *testing.T) {
+	profiles, err := loadBytes([]byte(`profiles:
+  - id: example_win
+    match: { process: ["ApplicationFrameHost.exe"], title_regex: "Example Player" }
+    control: uia
+    uia: { play: "TogglePlaybackButton", next: "PlayNextButton", prev: "PlayPreviousButton" }
+    play_toggle: true
+    cue_on_navigate: true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := profiles[0]
+	if p.Control != domain.ControlUIA {
+		t.Errorf("control = %q, want uia", p.Control)
+	}
+	if p.UIA[domain.KeyPlay] != "TogglePlaybackButton" || p.UIA[domain.KeyNext] != "PlayNextButton" {
+		t.Errorf("uia map wrong: %+v", p.UIA)
+	}
+	if !p.HasAction(domain.KeyPrev) {
+		t.Error("HasAction(prev) should be true for the uia profile")
+	}
+}
+
+func TestLoadRejectsUIAWithoutPlay(t *testing.T) {
+	_, err := loadBytes([]byte(`profiles:
+  - id: bad
+    match: { process: ["x"], title_regex: "y" }
+    control: uia
+    uia: { next: "PlayNextButton" }
+`))
+	if err == nil {
+		t.Fatal("expected validation error for uia profile missing uia.play")
+	}
+}
+
 func TestLoadRejectsBadControl(t *testing.T) {
 	_, err := loadBytes([]byte(`profiles:
   - id: bad

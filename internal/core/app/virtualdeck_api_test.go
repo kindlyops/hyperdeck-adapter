@@ -89,3 +89,49 @@ func TestAPIControlWithoutControllerErrors(t *testing.T) {
 		t.Error("api profile without a configured controller should error")
 	}
 }
+
+// uiaProfile models Example Player: ControlUIA with a UIA action map (no keymap),
+// toggle play, cue-on-navigate.
+func uiaProfile() domain.Profile {
+	return domain.Profile{
+		ID:            "example",
+		Control:       domain.ControlUIA,
+		PlayToggle:    true,
+		CueOnNavigate: true,
+		UIA: map[domain.KeyName]string{
+			domain.KeyPlay: "TogglePlaybackButton",
+			domain.KeyNext: "PlayNextButton",
+			domain.KeyPrev: "PlayPreviousButton",
+		},
+	}
+}
+
+func TestUIAControlRoutesToController(t *testing.T) {
+	m := injector.NewMock()
+	ctrl := &mockController{}
+	s := lockedSession(uiaProfile(), domain.ClipList{{ID: 1}, {ID: 2}, {ID: 3}})
+	d := NewVirtualDeck(s, m, WithController(ctrl))
+
+	if err := d.Play(); err != nil { // toggle play -> KeyPlay
+		t.Fatal(err)
+	}
+	if err := d.Next(); err != nil { // navigate -> KeyNext
+		t.Fatal(err)
+	}
+	if err := d.Prev(); err != nil { // navigate -> KeyPrev
+		t.Fatal(err)
+	}
+
+	want := []domain.KeyName{domain.KeyPlay, domain.KeyNext, domain.KeyPrev}
+	if len(ctrl.keys) != len(want) {
+		t.Fatalf("controller keys = %v, want %v", ctrl.keys, want)
+	}
+	for i := range want {
+		if ctrl.keys[i] != want[i] {
+			t.Errorf("controller key %d = %q, want %q", i, ctrl.keys[i], want[i])
+		}
+	}
+	if len(m.Sent) != 0 || len(m.Focused) != 0 {
+		t.Errorf("uia control must not touch the injector; sent=%v focused=%v", m.Sent, m.Focused)
+	}
+}

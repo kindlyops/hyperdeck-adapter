@@ -64,8 +64,8 @@ func (d *VirtualDeck) Stop() error {
 	if !ok {
 		return ErrNotLocked
 	}
-	if _, hasStop := p.Keymap[domain.KeyStop]; hasStop {
-		// Discrete stop key (e.g. VLC 's', Mitti panic): always fire it.
+	if p.HasAction(domain.KeyStop) {
+		// Discrete stop action (e.g. VLC 's', Mitti panic): always fire it.
 		d.session.SetState(domain.StateStopped)
 		return d.send(p, w, domain.KeyStop)
 	}
@@ -129,9 +129,10 @@ func (d *VirtualDeck) Rehome() error {
 	if !ok {
 		return ErrNotLocked
 	}
-	if p.Control == domain.ControlAPI {
-		// No keystroke homing for api control; reset to a known stopped state.
-		if d.controller != nil {
+	if p.UsesController() {
+		// No keystroke homing for out-of-band control; reset to a known stopped
+		// state, issuing a discrete stop first if the profile defines one.
+		if d.controller != nil && p.HasAction(domain.KeyStop) {
 			if err := d.controller.Control(p, w, domain.KeyStop); err != nil {
 				return err
 			}
@@ -183,13 +184,13 @@ func (d *VirtualDeck) cueIfNavigatePauses(p domain.Profile) {
 }
 
 func (d *VirtualDeck) send(p domain.Profile, w domain.Window, key domain.KeyName) error {
-	chord, ok := p.Keymap[key]
-	if !ok {
+	if !p.HasAction(key) {
 		return nil // unmapped action -> acked no-op
 	}
-	if p.Control == domain.ControlAPI {
+	if p.UsesController() {
+		// API / UIA control: hand the action to the out-of-band controller.
 		if d.controller == nil {
-			return fmt.Errorf("profile %q uses api control but no controller is configured", p.ID)
+			return fmt.Errorf("profile %q uses %s control but no controller is configured", p.ID, p.Control)
 		}
 		return d.controller.Control(p, w, key)
 	}
@@ -198,7 +199,7 @@ func (d *VirtualDeck) send(p domain.Profile, w domain.Window, key domain.KeyName
 			return err
 		}
 	}
-	return d.injector.SendKeys(w, []domain.Chord{chord})
+	return d.injector.SendKeys(w, []domain.Chord{p.Keymap[key]})
 }
 
 func clamp(v, lo, hi int) int {

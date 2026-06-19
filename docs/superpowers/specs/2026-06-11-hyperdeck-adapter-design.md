@@ -439,33 +439,43 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
   - **Verified live:** ran the real adapter headless against running VLC and drove
     it over the HyperDeck TCP protocol — `play`→playing, `goto`→track changes via
     next/prev, `stop`→stopped, each confirmed through VLC's HTTP `status.json`.
-- **Example Player on Windows (UWP)** — profile `example_player_windows` added and
-  **verified end-to-end on Windows.** Findings:
+- **Example Player on Windows (UWP) → UI Automation control** — profile
+  `example_player_windows` added and **verified end-to-end on Windows.** Findings:
   - Example Player is a UWP/Store app with a split window: content is a
     `Windows.UI.Core.CoreWindow` owned by `ExamplePlayer.exe`, but the focusable
     top-level frame is an `ApplicationFrameWindow` owned by
-    `ApplicationFrameHost.exe`. `SetForegroundWindow` works on the **frame** only;
-    focusing the CoreWindow returns `GetForegroundWindow()==0`.
-  - So the profile matches `process: ["ApplicationFrameHost.exe"]` +
-    `title_regex: "Example Player"` (matching `ExamplePlayer.exe` would select a CoreWindow
-    that can't be brought foreground). General lesson for UWP players.
-  - Windows player shortcuts (example.com/en/online-help/uwp-player/player-shortcuts):
-    play/pause `Space`, next `Ctrl+Right`, prev `Ctrl+Left`, no discrete stop.
-    next/prev are *modified* chords → delivered via `SendInput` after `Focus`
-    (`injection: focus`).
-  - **Verified live** against a Example Player playlist (observed via screenshots):
-    focus brings the frame foreground; injected `Space` toggles play↔pause
-    (frame-diff 18→0→20→0); injected `Ctrl+Right`/`Ctrl+Left` step playlist items
-    forward/back (109 → 01 JWST → clip 3 and back).
+    `ApplicationFrameHost.exe`. The profile matches
+    `process: ["ApplicationFrameHost.exe"]` + `title_regex: "Example Player"`.
+  - **Background keystrokes don't work for UWP:** `SendInput` is foreground-only;
+    posting key messages to the CoreWindow is ignored; and next/prev need a Ctrl
+    modifier that `PostMessage` can't carry. (Synthesized `Space`/`Ctrl+arrow`
+    *do* work in **focus mode** — verified — but require stealing focus each key.)
+  - **Media keys / SMTC: not viable** — the player doesn't register a media session;
+    injected `VK_MEDIA_*` had no effect.
+  - **Chosen mechanism: UI Automation.** Every XAML control is a UIA element;
+    the player exposes stable AutomationIds — `TogglePlaybackButton` (play/pause),
+    `PlayNextButton`, `PlayPreviousButton` — all support `InvokePattern`. New
+    driven port backend `internal/adapter/driven/uia` (pure-syscall COM via
+    `IUIAutomation`, no cgo) invokes them. Profiles gained `control: uia` + a
+    `uia:` map of action→AutomationId; `domain.Profile.HasAction`/`UsesController`
+    make the core control-mode-aware; a `controlRouter` in the composition root
+    dispatches api→VLC-HTTP, uia→UIA.
+  - **Caveat:** invoking a UWP control activates the player (brings it foreground). That's
+    a platform property, not avoidable — UIA is still the better mechanism (no
+    modifier fragility, targets the player precisely, can read play state) but does not
+    achieve "no focus." True background control needs a player with an out-of-band
+    API (e.g. VLC over HTTP).
+  - **Verified live** by running the real adapter headless and driving it over the
+    HyperDeck **TCP protocol**: `play`/`stop` toggled the player play/pause (read back via
+    UIA `TogglePlaybackButton` Name `Play`↔`Pause`); `goto` stepped playlist items
+    forward and back (clip 2 → clip 4 → clip 3).
   - Note on Example Player config: its playlist default action can be set to "pause"
     (cue mode) so advancing to an item cues it paused rather than auto-playing —
-    appropriate for live-event cueing, where each item is cued then played on
-    call. The test playlist used this mode.
-  - Modeled via a new profile flag `cue_on_navigate: true`: next/prev/goto leave
-    the deck in the stopped/cued state so a subsequent transport `play` fires the
-    play key to start the cued clip (without it, the deck would still be modeled
-    as playing and `play` would be suppressed, leaving the cued clip paused). The
-    Example Player example profiles set it.
+    appropriate for live-event cueing. Modeled via the profile flag
+    `cue_on_navigate: true`: next/prev/goto leave the deck stopped/cued so a
+    subsequent transport `play` fires to start the cued clip (without it the deck
+    would still be modeled as playing and `play` would be suppressed). The the player
+    Library example profiles set it.
 - **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
   (see Non-goals).
 - Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;

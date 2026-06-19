@@ -4,6 +4,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/injector"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/stateprobe"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/tray"
+	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/uia"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/vlchttp"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driving/hyperdeck"
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/app"
@@ -57,7 +59,11 @@ func main() {
 	}
 
 	session := app.NewSession()
-	deck := app.NewVirtualDeck(session, inj, app.WithController(vlchttp.New()))
+	controller := controlRouter{
+		domain.ControlAPI: vlchttp.New(),
+		domain.ControlUIA: uia.New(),
+	}
+	deck := app.NewVirtualDeck(session, inj, app.WithController(controller))
 	clk := clock.New()
 
 	presenter, run := ui(*noTray, deck)
@@ -81,6 +87,18 @@ func main() {
 
 	slog.Info("hyperdeck-adapter started", "bind", *bind, "profiles", len(profiles), "tray", !*noTray)
 	run() // blocks: tray event loop, or wait-for-signal when headless
+}
+
+// controlRouter dispatches a transport action to the controller backend for the
+// profile's control mode (api -> VLC HTTP, uia -> UI Automation).
+type controlRouter map[domain.ControlMode]port.PlayerController
+
+func (r controlRouter) Control(p domain.Profile, w domain.Window, key domain.KeyName) error {
+	c, ok := r[p.Control]
+	if !ok || c == nil {
+		return fmt.Errorf("no controller configured for control mode %q", p.Control)
+	}
+	return c.Control(p, w, key)
 }
 
 // ui returns the status presenter and the blocking run loop for the chosen mode.

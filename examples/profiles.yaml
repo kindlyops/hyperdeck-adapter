@@ -27,22 +27,23 @@ profiles:
     clip_source: { type: positional, count: 50 }
     state: { type: none }
 
-  # Example Player on Windows is a UWP (Store) app. Its visible window is split:
-  # the content is a "Windows.UI.Core.CoreWindow" owned by ExamplePlayer.exe, but the
-  # focusable top-level frame ("ApplicationFrameWindow") is owned by
-  # ApplicationFrameHost.exe. SetForegroundWindow only works on the frame, so this
-  # profile matches ApplicationFrameHost.exe + title_regex "Example Player" (matching
-  # ExamplePlayer.exe would select a CoreWindow that cannot be brought foreground).
-  # Keys are Example Player's documented Windows player shortcuts
-  # (example.com/en/online-help/uwp-player/player-shortcuts): play/pause Space, next
-  # Ctrl+Right, previous Ctrl+Left; no discrete stop (Space toggles, so Stop pauses
-  # via Space). next/prev are modified chords, delivered via SendInput after Focus
-  # (injection: focus). Verified on Windows: focus, play/pause (Space), and
-  # playlist next/prev (Ctrl+Right/Left) all drive a playing Example Player playlist.
+  # Example Player on Windows is a UWP (Store) app. It can't be driven by background
+  # keystrokes: synthesized keys are foreground-only, UWP CoreWindows ignore posted
+  # key messages, and its next/prev need a Ctrl modifier that PostMessage can't
+  # carry. Instead it's controlled via UI Automation (control: uia) — every XAML
+  # control is a UIA element we Invoke() by AutomationId. (Invoking does bring the player
+  # to the foreground; that's a UWP property, not avoidable.) The window is matched
+  # on the focusable frame: ApplicationFrameHost.exe + title_regex "Example Player".
+  # AutomationIds below are Example Player's player buttons (verified on Windows:
+  # TogglePlaybackButton toggles play/pause, PlayNextButton / PlayPreviousButton
+  # step the playlist). No discrete stop button, so Stop pauses via the toggle.
   - id: example_player_windows
     match: { process: ["ApplicationFrameHost.exe"], title_regex: "Example Player" }
-    injection: focus
-    keymap: { play: "space", next: "ctrl+right", prev: "ctrl+left" }
+    control: uia
+    uia:
+      play: "TogglePlaybackButton"
+      next: "PlayNextButton"
+      prev: "PlayPreviousButton"
     play_toggle: true
     cue_on_navigate: true # playlist "pause" mode: navigation cues paused; Play starts it
     clip_source: { type: positional, count: 50 }
