@@ -70,7 +70,7 @@ function screenFace(w: number, h: number, color: number, intensity = 1): Mesh {
   const base = new Color(color).multiplyScalar(intensity);
   const mat = new MeshBasicMaterial({ color: base.clone(), toneMapped: false });
   const mesh = new Mesh(new PlaneGeometry(w, h), mat);
-  screens.push({ mat, base, phase: Math.random() * Math.PI * 2, speed: 4 + Math.random() * 6 });
+  screens.push({ mat, base, phase: Math.random() * Math.PI * 2, speed: 0.4 + Math.random() * 0.9 });
   return mesh;
 }
 
@@ -607,14 +607,14 @@ export function startControlRoom(hero: HTMLElement): void {
   function render(elapsed: number): void {
     // Film-leader countdown (shared by the stage screen and a control-room monitor).
     countdown.update(elapsed);
-    // Screen flicker.
+    // Gentle screen shimmer (slow, low-amplitude — not a strobe).
     for (const s of screens) {
-      const f = 0.82 + 0.18 * Math.sin(elapsed * s.speed + s.phase) * (0.5 + 0.5 * Math.sin(elapsed * 0.7 + s.phase));
+      const f = 0.94 + 0.06 * Math.sin(elapsed * s.speed + s.phase);
       s.mat.color.copy(s.base).multiplyScalar(f);
     }
-    // Tally blink.
+    // Tally lights: a soft pulse, mostly on (no hard blink).
     for (const t of tallies) {
-      const on = (Math.sin(elapsed * 2.0 + t.phase) > 0.2) ? 1 : 0.15;
+      const on = 0.72 + 0.28 * Math.sin(elapsed * 1.1 + t.phase);
       t.mat.color.setRGB(on, on * 0.12, on * 0.1);
     }
     // Operators breathe and shift slightly.
