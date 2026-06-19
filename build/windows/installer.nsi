@@ -15,6 +15,11 @@ Unicode true
 !ifndef OUTFILE
   !define OUTFILE "hyperdeck-adapter-setup.exe"
 !endif
+; VIProductVersion must be purely numeric x.x.x.x, so prerelease suffixes
+; (e.g. 0.0.1-rc1) are stripped to VIVERSION by the caller.
+!ifndef VIVERSION
+  !define VIVERSION "0.0.0"
+!endif
 
 Name "HyperDeck Adapter ${VERSION}"
 OutFile "${OUTFILE}"
@@ -23,7 +28,7 @@ InstallDirRegKey HKLM "Software\HyperDeck Adapter" "InstallDir"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${VIVERSION}.0"
 VIAddVersionKey "ProductName" "HyperDeck Adapter"
 VIAddVersionKey "FileDescription" "HyperDeck Adapter installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
