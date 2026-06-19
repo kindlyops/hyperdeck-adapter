@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="HyperDeck Adapter — make a HyperDeck controller drive a local media player that has no network control, by translating transport commands into keystrokes. macOS, Windows, Linux."
+    />
+    <meta name="color-scheme" content="dark" />
+    <title>HyperDeck Adapter — control the player on your desk</title>
+  </head>
+  <body>
+    <div id="page">
+      <!-- Hero: full-viewport three.js control-room diorama (canvas injected here) -->
+      <header id="hero" aria-label="A dark broadcast control room overlooking a theater">
+        <div id="hero-fallback" hidden>
+          <div class="fallback-card">
+            <span class="fallback-dot" aria-hidden="true"></span>
+            <h1 class="fallback-title">HyperDeck Adapter</h1>
+            <p class="fallback-sub">a dark control room would be here, but your browser sat this one out</p>
+          </div>
+        </div>
+        <div id="hero-overlay">
+          <h1 class="hero-wordmark">HyperDeck Adapter</h1>
+          <p class="hero-tagline">drive the player on your desk from any HyperDeck controller</p>
+          <a class="hero-scroll" href="#about" aria-label="Scroll to learn more">&#8595;</a>
+        </div>
+      </header>
+
+      <main id="about">
+        <article>
+          <h2>What it does</h2>
+          <p class="lede">
+            HyperDeck Adapter emulates a Blackmagic HyperDeck on the network, so a
+            HyperDeck controller — Bitfocus Companion, an ATEM switcher, a hardware
+            remote — can drive a <em>local media player that has no network control</em>.
+            <span class="sidenote">It listens on TCP 9993 and speaks the HyperDeck Ethernet Protocol.</span>
+            It locks onto one running player and turns <code>play</code> / <code>stop</code>
+            / <code>goto</code> into the keystrokes — or UI Automation calls, or HTTP
+            commands — that player actually expects.
+          </p>
+
+          <hr class="hairline" />
+
+          <h2>Features</h2>
+          <ul class="features">
+            <li>Speaks the HyperDeck Ethernet Protocol on port 9993 — point Companion or an ATEM at it</li>
+            <li>Locks onto a running player and shows lock state in the system tray
+              <span class="sidenote">A green record dot when locked; a hollow ring when idle.</span>
+            </li>
+            <li>Drives players by keystroke injection, UI Automation, or HTTP — whatever the player understands</li>
+            <li>Adding a new player is configuration, not code — a small YAML profile</li>
+            <li>Runs on macOS, Windows, and Linux</li>
+          </ul>
+
+          <hr class="hairline" />
+
+          <h2>Download</h2>
+          <p>Free and open source, for macOS, Windows, and Linux.</p>
+          <div class="downloads">
+            <a id="dl-mac" class="dl-button" href="https://github.com/kindlyops/hyperdeck-adapter/releases" rel="noopener">
+              <span class="dl-os">Download for macOS</span>
+              <span class="dl-meta" id="dl-mac-meta">.dmg</span>
+            </a>
+            <a id="dl-win" class="dl-button" href="https://github.com/kindlyops/hyperdeck-adapter/releases" rel="noopener">
+              <span class="dl-os">Download for Windows</span>
+              <span class="dl-meta" id="dl-win-meta">.exe</span>
+            </a>
+            <a id="dl-linux" class="dl-button" href="https://github.com/kindlyops/hyperdeck-adapter/releases" rel="noopener">
+              <span class="dl-os">Download for Linux</span>
+              <span class="dl-meta" id="dl-linux-meta">.deb / .tar.gz</span>
+            </a>
+          </div>
+
+          <hr class="hairline" />
+
+          <h2>How it fits together</h2>
+          <p>
+            A controller talks HyperDeck over the network; the adapter translates each
+            transport command into whatever the locked-on player understands and delivers
+            it locally.
+          </p>
+          <pre class="flow"><code>HyperDeck controller ──TCP 9993──▶ HyperDeck Adapter ──keys / UIA / HTTP──▶ player</code></pre>
+        </article>
+      </main>
+
+      <footer>
+        <hr class="hairline" />
+        <p>
+          <a href="https://github.com/kindlyops/hyperdeck-adapter" rel="noopener">Source on GitHub</a>
+          &nbsp;&middot;&nbsp; Built with three.js
+          &nbsp;&middot;&nbsp; Apache-2.0 licensed
+        </p>
+        <p class="hint" aria-hidden="true">psst: type <kbd>td</kbd></p>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -15,6 +15,8 @@ HyperDeck controller ──TCP 9993──▶ hyperdeck-adapter ──keystrokes�
 A system-tray / menu-bar icon shows whether it is locked onto a player. Adding a new
 player is configuration, not code.
 
+**Website:** <https://kindlyops.github.io/hyperdeck-adapter/> (source in [`site/`](site/)) — psst, type `td`.
+
 ## Status
 
 - **macOS** — injector implemented and verified live against **Example Player** and

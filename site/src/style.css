@@ -1,0 +1,348 @@
+/* HyperDeck Adapter site — dark broadcast-control-room theme */
+
+:root {
+  --bg: #0a0c10;
+  --panel: #11151c;
+  --panel-2: #161b22;
+  --line: #232b36;
+  --ink: #e6edf3;
+  --muted: #9aa7b4;
+  --green: #2ecc71; /* brand record dot */
+  --cyan: #38bdf8;
+  --amber: #f59e0b;
+  --red: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 1.08rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+#page {
+  transition: opacity 0.6s ease;
+}
+
+#page.draining {
+  opacity: 0;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+kbd,
+.flow {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', ui-monospace, monospace;
+}
+
+code {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+  font-size: 0.9em;
+}
+
+/* ---------- Hero ---------- */
+
+#hero {
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 20%, #131a24 0%, #0a0c10 70%);
+}
+
+#hero canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hero-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 9vh;
+  pointer-events: none;
+  text-align: center;
+}
+
+.hero-wordmark {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 4.6rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f3f8ff;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.75);
+}
+
+.hero-tagline {
+  margin: 0.5rem 0 0;
+  font-size: clamp(1rem, 2.4vw, 1.4rem);
+  color: var(--muted);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+
+.hero-scroll {
+  pointer-events: auto;
+  margin-top: 2rem;
+  font-size: 1.8rem;
+  color: var(--muted);
+  animation: bob 2s ease-in-out infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-scroll { animation: none; }
+}
+
+/* ---------- Hero fallback (no WebGL) ---------- */
+
+#hero-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fallback-card {
+  text-align: center;
+  color: var(--muted);
+}
+
+.fallback-dot {
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 40px rgba(46, 204, 113, 0.6);
+}
+
+.fallback-title {
+  margin: 1rem 0 0.25rem;
+  color: var(--ink);
+  font-size: 2.4rem;
+}
+
+/* ---------- Content ---------- */
+
+#about {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 6rem 1.5rem 2rem;
+}
+
+article h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 2.5rem 0 0.75rem;
+  color: #f3f8ff;
+}
+
+.lede {
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+
+em {
+  color: var(--green);
+  font-style: normal;
+}
+
+/* Tufte-style sidenote: inline on narrow screens, margin note on wide ones. */
+.sidenote {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--muted);
+  border-left: 2px solid var(--line);
+  padding-left: 0.85rem;
+  margin: 0.6rem 0;
+}
+
+@media (min-width: 1180px) {
+  .sidenote {
+    position: absolute;
+    left: calc(50% + 24rem);
+    width: 15rem;
+    margin-top: -0.2rem;
+    border-left: none;
+    padding-left: 0;
+  }
+  article p {
+    position: relative;
+  }
+}
+
+.hairline {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2.5rem 0;
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+}
+
+.features li {
+  position: relative;
+  padding: 0.5rem 0 0.5rem 1.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.features li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1.05rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.7);
+}
+
+.flow {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  font-size: 0.86rem;
+  color: var(--cyan);
+}
+
+/* ---------- Downloads ---------- */
+
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin: 1.25rem 0;
+}
+
+.dl-button {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1.1rem;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.1s ease;
+}
+
+.dl-button:hover {
+  border-color: var(--green);
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+.dl-os {
+  font-weight: 600;
+}
+
+.dl-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ---------- Footer ---------- */
+
+footer {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 4rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #5a6675;
+}
+
+kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0.05em 0.45em;
+  font-size: 0.85em;
+  color: var(--ink);
+}
+
+/* ---------- Easter egg ---------- */
+
+body.egg-active {
+  overflow: hidden;
+}
+
+#egg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100vw;
+  height: 100vh;
+}
+
+#egg-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 6vh;
+  z-index: 101;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+#egg-hint.visible {
+  opacity: 1;
+}

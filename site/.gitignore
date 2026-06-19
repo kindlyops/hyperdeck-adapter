@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# local screenshot/debug artifacts
+shot.mjs
+shot-*.png
