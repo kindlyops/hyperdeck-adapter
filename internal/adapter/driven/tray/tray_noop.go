@@ -18,7 +18,8 @@ type Tray struct {
 }
 
 // New returns a no-op Tray with the same API as the desktop implementation.
-func New(onRehome, onQuit func()) *Tray {
+// profiles/active/onSelect are unused: this platform has no interactive menu.
+func New(onRehome, onQuit func(), profiles []string, active string, onSelect func(string)) *Tray {
 	return &Tray{onRehome: onRehome, onQuit: onQuit}
 }
 

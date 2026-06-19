@@ -63,6 +63,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	selStore := config.NewSelectionStore(defaultSelectionPath())
+	active, err := selStore.Load()
+	if err != nil {
+		slog.Warn("load selection; defaulting to Auto", "err", err)
+		active = ""
+	}
+	active = validateActive(active, profiles)
+
 	inj, err := injector.New()
 	if err != nil {
 		slog.Error("init injector", "err", err)
@@ -81,9 +89,17 @@ func main() {
 	deck := app.NewVirtualDeck(session, inj, app.WithController(controller))
 	clk := clock.New()
 
-	presenter, run := ui(*noTray, deck)
+	var lm *app.LockManager
+	onSelect := func(id string) {
+		if err := selStore.Save(id); err != nil {
+			slog.Warn("save selection", "err", err)
+		}
+		lm.SetActive(id)
+	}
 
-	lm := app.NewLockManager(session, inj, profiles, presenter,
+	presenter, run := ui(*noTray, deck, profileIDs(profiles), active, onSelect)
+
+	lm = app.NewLockManager(session, inj, profiles, presenter,
 		func(p domain.Profile) port.ClipSource { return clipsource.New(p) },
 		func(p domain.Profile) port.StateProbe { return stateprobe.New(p, uiaEngine) })
 	rec := app.NewReconciler(session)
@@ -95,7 +111,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	lm.Poll() // lock immediately if a player is already running
+	lm.SetActive(active) // apply persisted selection and lock immediately if a matching player is running
 	go func() { _ = srv.Serve(ln) }()
 	go lm.Run(clk, *interval)
 	go rec.Run(clk, *interval)
@@ -117,12 +133,46 @@ func (r controlRouter) Control(p domain.Profile, w domain.Window, key domain.Key
 }
 
 // ui returns the status presenter and the blocking run loop for the chosen mode.
-func ui(noTray bool, deck *app.VirtualDeck) (port.StatusPresenter, func()) {
+func ui(noTray bool, deck *app.VirtualDeck, profiles []string, active string, onSelect func(string)) (port.StatusPresenter, func()) {
 	if noTray {
 		return logPresenter{}, waitForSignal
 	}
-	t := tray.New(func() { _ = deck.Rehome() }, func() { os.Exit(0) })
+	t := tray.New(func() { _ = deck.Rehome() }, func() { os.Exit(0) }, profiles, active, onSelect)
 	return t, t.Run
+}
+
+// profileIDs extracts the ordered profile ids for the tray menu.
+func profileIDs(profiles []domain.Profile) []string {
+	ids := make([]string, len(profiles))
+	for i, p := range profiles {
+		ids[i] = p.ID
+	}
+	return ids
+}
+
+// validateActive keeps a pinned id only when it still names a loaded profile;
+// an unknown id (renamed/removed profile) falls back to Auto with a warning.
+func validateActive(active string, profiles []domain.Profile) string {
+	if active == "" {
+		return ""
+	}
+	for _, p := range profiles {
+		if p.ID == active {
+			return active
+		}
+	}
+	slog.Warn("pinned profile not found; falling back to Auto", "profile", active)
+	return ""
+}
+
+// defaultSelectionPath is the JSON state file holding the pinned profile id,
+// stored alongside profiles.yaml in the OS config dir.
+func defaultSelectionPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "selection.json"
+	}
+	return filepath.Join(dir, "hyperdeck-adapter", "selection.json")
 }
 
 func waitForSignal() {
