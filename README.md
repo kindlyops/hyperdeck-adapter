@@ -38,6 +38,21 @@ Design docs live in [`docs/superpowers/specs/`](docs/superpowers/specs/).
 On macOS the adapter needs the **Accessibility** (input) permission to deliver
 keystrokes — see [Permissions](#permissions-macos).
 
+## Install
+
+Prebuilt installers are attached to each [GitHub release](https://github.com/kindlyops/hyperdeck-adapter/releases):
+
+- **macOS** — `…_macos_universal.dmg` (universal arm64 + Intel). Open it and drag
+  **HyperDeck Adapter.app** to Applications. It runs as a menu-bar app.
+- **Windows** — `…_windows_amd64-setup.exe` (NSIS installer). Adds a Start-menu
+  shortcut.
+- **Linux** — `…_linux_amd64.tar.gz` or the `.deb` (`sudo apt install ./hyperdeck-adapter_*_amd64.deb`).
+  Headless only — the tray/injector are no-ops on Linux.
+
+> Installers are unsigned until code-signing credentials are configured, so macOS
+> Gatekeeper and Windows SmartScreen may warn on first launch. Verify downloads
+> against `checksums.txt` on the release.
+
 ## Quick demo
 
 1. Open a player and start a playlist — e.g. **Example Player** or **VLC** with a few
@@ -170,3 +185,30 @@ docs/superpowers/specs/  design + handoff specs
 The architecture is hexagonal: a pure core surrounded by adapters. The only
 OS-specific code is the injector, behind one interface with `windows` / `darwin` /
 no-op implementations — which is what lets the rest build and test on any platform.
+
+## Releasing (maintainers)
+
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
+on a native macOS + Windows + Linux matrix (macOS needs a real runner for its cgo
+injector). To cut a release, push a `vX.Y.Z` tag:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The workflow creates a **draft** GitHub release and attaches the macOS `.dmg`,
+Windows `-setup.exe`, Linux `.tar.gz` + `.deb`, and `checksums.txt`. Review and
+publish the draft. You can also run it manually (**Actions → Release →
+Run workflow**) with a version number, which creates the tag for you.
+
+Packaging assets live under [`build/`](build/): the app icon
+(`cd build && go run gen_appicon.go` regenerates `icon/appicon.png` +
+`icon/app.ico`), the macOS `Info.plist`, the NSIS installer script, and the nfpm
+`.deb` config.
+
+**Code signing** is wired up but inert until secrets are set, so unsigned releases
+work out of the box. Add these repository secrets to activate it:
+
+- macOS: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`
+  (signing) and `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` (notarization).
+- Windows: `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` (Authenticode).

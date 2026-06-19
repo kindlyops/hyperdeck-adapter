@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>HyperDeck Adapter</string>
+  <key>CFBundleDisplayName</key>
+  <string>HyperDeck Adapter</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.kindlyops.hyperdeck-adapter</string>
+  <key>CFBundleVersion</key>
+  <string>__VERSION__</string>
+  <key>CFBundleShortVersionString</key>
+  <string>__VERSION__</string>
+  <key>CFBundleExecutable</key>
+  <string>hyperdeck-adapter</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <!-- Menu-bar / tray agent: no Dock icon, no main window. -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>HyperDeck Adapter sends keystrokes to the media player you select.</string>
+</dict>
+</plist>
