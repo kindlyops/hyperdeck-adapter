@@ -17,6 +17,7 @@ import (
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/injector"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/stateprobe"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/tray"
+	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driven/vlchttp"
 	"github.com/kindlyops/hyperdeck-adapter/internal/adapter/driving/hyperdeck"
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/app"
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	session := app.NewSession()
-	deck := app.NewVirtualDeck(session, inj)
+	deck := app.NewVirtualDeck(session, inj, app.WithController(vlchttp.New()))
 	clk := clock.New()
 
 	presenter, run := ui(*noTray, deck)

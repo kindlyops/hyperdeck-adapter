@@ -34,12 +34,20 @@ type fileSchema struct {
 type profileSchema struct {
 	ID        string            `yaml:"id"`
 	Match     matchSchema       `yaml:"match"`
+	Control   string            `yaml:"control"`
 	Injection string            `yaml:"injection"`
+	API       apiSchema         `yaml:"api"`
 	Keymap    map[string]string `yaml:"keymap"`
 	Toggle    bool              `yaml:"play_toggle"`
 	Clip      clipSchema        `yaml:"clip_source"`
 	State     stateSchema       `yaml:"state"`
 	Homing    []string          `yaml:"homing"`
+}
+
+type apiSchema struct {
+	Type     string `yaml:"type"`
+	BaseURL  string `yaml:"base_url"`
+	Password string `yaml:"password"`
 }
 
 type matchSchema struct {
@@ -78,9 +86,24 @@ func convert(ps profileSchema) (domain.Profile, error) {
 	if ps.ID == "" {
 		return domain.Profile{}, fmt.Errorf("profile missing id")
 	}
+	control := domain.ControlMode(ps.Control)
+	if control == "" {
+		control = domain.ControlKeys
+	}
+	if control != domain.ControlKeys && control != domain.ControlAPI {
+		return domain.Profile{}, fmt.Errorf("profile %q: invalid control %q (want keys|api)", ps.ID, ps.Control)
+	}
+	// Injection only governs keystroke control; api profiles may omit it.
 	mode := domain.InjectionMode(ps.Injection)
-	if mode != domain.InjectionFocus && mode != domain.InjectionBackground {
+	if control == domain.ControlKeys && mode != domain.InjectionFocus && mode != domain.InjectionBackground {
 		return domain.Profile{}, fmt.Errorf("profile %q: invalid injection %q (want focus|background)", ps.ID, ps.Injection)
+	}
+	var api domain.APIConfig
+	if control == domain.ControlAPI {
+		if ps.API.Type != "vlc_http" {
+			return domain.Profile{}, fmt.Errorf("profile %q: invalid api.type %q (want vlc_http)", ps.ID, ps.API.Type)
+		}
+		api = domain.APIConfig{Type: ps.API.Type, BaseURL: ps.API.BaseURL, Password: ps.API.Password}
 	}
 	if len(ps.Match.Process) == 0 {
 		return domain.Profile{}, fmt.Errorf("profile %q: match.process must list at least one process name", ps.ID)
@@ -117,7 +140,9 @@ func convert(ps profileSchema) (domain.Profile, error) {
 	return domain.Profile{
 		ID:         ps.ID,
 		Match:      domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
+		Control:    control,
 		Injection:  mode,
+		API:        api,
 		Keymap:     keymap,
 		PlayToggle: ps.Toggle,
 		ClipSource: domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},

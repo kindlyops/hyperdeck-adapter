@@ -1,20 +1,32 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/port"
 )
 
 // VirtualDeck implements port.Transport and port.Query over a Session.
 type VirtualDeck struct {
-	session  *Session
-	injector port.KeyInjector
-	device   domain.DeviceInfo
+	session    *Session
+	injector   port.KeyInjector
+	controller port.PlayerController // optional; used by ControlAPI profiles
+	device     domain.DeviceInfo
+}
+
+// Option customizes a VirtualDeck at construction.
+type Option func(*VirtualDeck)
+
+// WithController supplies the player-control backend used by ControlAPI profiles.
+// Without it, an api-control profile errors when a transport command is issued.
+func WithController(c port.PlayerController) Option {
+	return func(d *VirtualDeck) { d.controller = c }
 }
 
 // NewVirtualDeck wires the deck to its shared session and key injector.
-func NewVirtualDeck(s *Session, inj port.KeyInjector) *VirtualDeck {
-	return &VirtualDeck{
+func NewVirtualDeck(s *Session, inj port.KeyInjector, opts ...Option) *VirtualDeck {
+	d := &VirtualDeck{
 		session:  s,
 		injector: inj,
 		device: domain.DeviceInfo{
@@ -23,6 +35,10 @@ func NewVirtualDeck(s *Session, inj port.KeyInjector) *VirtualDeck {
 			UniqueID:        "hyperdeck-adapter",
 		},
 	}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d
 }
 
 // Play moves the deck to the playing state.
@@ -112,6 +128,17 @@ func (d *VirtualDeck) Rehome() error {
 	if !ok {
 		return ErrNotLocked
 	}
+	if p.Control == domain.ControlAPI {
+		// No keystroke homing for api control; reset to a known stopped state.
+		if d.controller != nil {
+			if err := d.controller.Control(p, w, domain.KeyStop); err != nil {
+				return err
+			}
+		}
+		d.session.SetState(domain.StateStopped)
+		d.session.SetCurrentClip(1)
+		return nil
+	}
 	if p.Injection == domain.InjectionFocus {
 		if err := d.injector.Focus(w); err != nil {
 			return err
@@ -148,6 +175,12 @@ func (d *VirtualDeck) send(p domain.Profile, w domain.Window, key domain.KeyName
 	chord, ok := p.Keymap[key]
 	if !ok {
 		return nil // unmapped action -> acked no-op
+	}
+	if p.Control == domain.ControlAPI {
+		if d.controller == nil {
+			return fmt.Errorf("profile %q uses api control but no controller is configured", p.ID)
+		}
+		return d.controller.Control(p, w, key)
 	}
 	if p.Injection == domain.InjectionFocus {
 		if err := d.injector.Focus(w); err != nil {

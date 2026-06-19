@@ -39,6 +39,24 @@ profiles:
     state: { type: title_regex, playing: ".+ - VLC media player" }
     homing: ["cmd+."]
 
+  # VLC on Windows. Process name is "vlc.exe" (confirmed via `injcheck list vlc`).
+  # VLC on Windows ignores synthesized hotkeys except play/pause (verified: n/p/s
+  # and even VLC's own SendKeys do nothing), so transport is driven out-of-band via
+  # VLC's HTTP interface (control: api) instead of key injection. Enable it in VLC:
+  # Preferences (All) > Interface > Main interfaces > check "Web", set a password
+  # under "Lua HTTP", or launch: vlc --extraintf http --http-password <pw>. The
+  # keymap entries below still declare which transport actions exist (their chord
+  # values are unused on the api path); the controller maps play->pl_play,
+  # stop->pl_stop, next->pl_next, prev->pl_previous.
+  - id: vlc_windows
+    match: { process: ["vlc.exe"], title_regex: "VLC media player" }
+    control: api
+    api: { type: vlc_http, base_url: "http://127.0.0.1:8080", password: "hdtest" }
+    keymap: { play: "space", stop: "s", next: "n", prev: "p" }
+    play_toggle: true
+    clip_source: { type: positional, count: 50 }
+    state: { type: title_regex, playing: ".+ - VLC media player" }
+
   # Mitti (macOS) has discrete cue transport keys; it needs foreground focus.
   - id: mitti
     match: { process: ["Mitti"] }

@@ -24,6 +24,22 @@ const (
 	InjectionBackground InjectionMode = "background"
 )
 
+// ControlMode selects how transport commands reach the player: by synthesizing
+// keystrokes (the default) or through an out-of-band control API.
+type ControlMode string
+
+const (
+	ControlKeys ControlMode = "keys" // synthesize keystrokes via the injector
+	ControlAPI  ControlMode = "api"  // drive the player through its control API
+)
+
+// APIConfig parameterizes a ControlAPI profile's control channel.
+type APIConfig struct {
+	Type     string // currently only "vlc_http"
+	BaseURL  string // e.g. "http://127.0.0.1:8080"
+	Password string // control-API password (VLC HTTP uses Basic auth, empty user)
+}
+
 // Keymap maps logical actions to concrete chords.
 type Keymap map[KeyName]Chord
 
@@ -50,7 +66,9 @@ type StateConfig struct {
 type Profile struct {
 	ID         string
 	Match      Match
+	Control    ControlMode // how transport reaches the player; "" means ControlKeys
 	Injection  InjectionMode
+	API        APIConfig // control channel for ControlAPI profiles
 	Keymap     Keymap
 	PlayToggle bool // when true, the play key toggles play/pause (e.g. Space in VLC/Example Player): Play suppresses when already playing, and Stop falls back to this key only when no discrete stop key is mapped
 	ClipSource ClipSourceConfig

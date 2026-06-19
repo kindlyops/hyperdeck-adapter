@@ -406,8 +406,39 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
 
 ## Open items
 
-- **Windows injector bodies** (`SendInput`/`PostMessage`/`EnumWindows`) — still
-  on-device stubs; implement and verify on Windows.
+- **Windows injector** (`SendInput`/`PostMessage`/`EnumWindows`) — **done and
+  verified.** `injector_windows.go` + pure `keymap_windows.go` (with tests).
+  Findings:
+  - `OpenWindows` (EnumWindows + visible/titled filter + Toolhelp32 pid→exe map)
+    works; `injcheck list vlc` enumerates VLC as process `vlc.exe`.
+  - `Focus` uses the foreground-lock-timeout reset + `AttachThreadInput` +
+    `SetForegroundWindow`/`SetFocus` workaround; brings a target foreground
+    reliably on an interactive (unlocked) session.
+  - `SendKeys` uses `SendInput` when the target HWND is foreground, else
+    `PostMessageW`. **Key delivery is proven**: `injcheck` typed "hello world"
+    into Notepad via `SendInput`.
+  - **Note on a locked session:** while the workstation is locked (foreground
+    owner `LockApp`), no process can take foreground or receive synthesized
+    input — focus and injection silently no-op. Verification requires an unlocked
+    interactive desktop.
+- **VLC on Windows → HTTP API control, not key injection** — **done and verified
+  end-to-end.** VLC on Windows honors *only* play/pause (`space`) from synthesized
+  input; `n`/`p`/`s`/`f` and even VLC's own `SendKeys` do nothing, regardless of
+  focus/fullscreen. So VLC's transport is driven out-of-band via its HTTP
+  interface instead of the injector:
+  - New driven port `port.PlayerController` and adapter
+    `internal/adapter/driven/vlchttp` mapping `play→pl_play`, `stop→pl_stop`,
+    `next→pl_next`, `prev→pl_previous` over `requests/status.json` (Basic auth,
+    empty user). Unit-tested with `httptest`.
+  - Profiles gained `control: keys|api` (default `keys`) and an `api:` block
+    (`type: vlc_http`, `base_url`, `password`). The `vlc_windows` example uses
+    `control: api`. The keymap entries on an api profile still mark which actions
+    exist (their chord values are unused on the api path).
+  - `VirtualDeck.send`/`Rehome` dispatch to the controller when `control: api`
+    (wired via `app.WithController`); all the toggle/clip modeling is unchanged.
+  - **Verified live:** ran the real adapter headless against running VLC and drove
+    it over the HyperDeck TCP protocol — `play`→playing, `goto`→track changes via
+    next/prev, `stop`→stopped, each confirmed through VLC's HTTP `status.json`.
 - **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
   (see Non-goals).
 - Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;
