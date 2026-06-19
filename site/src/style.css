@@ -303,6 +303,21 @@ footer {
   color: #5a6675;
 }
 
+#egg-trigger {
+  display: inline-block;
+  cursor: pointer;
+  padding: 0.5rem 0.2rem;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+#egg-trigger:hover,
+#egg-trigger:focus-visible {
+  color: var(--cyan);
+  outline: none;
+}
+
 kbd {
   background: var(--panel-2);
   border: 1px solid var(--line);
