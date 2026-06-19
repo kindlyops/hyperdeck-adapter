@@ -292,7 +292,7 @@ function buildTD(): Figure {
 // ---------------------------------------------------------------------------
 // Control room furniture.
 // ---------------------------------------------------------------------------
-function buildDesk(): Group {
+function buildDesk(countdown: CanvasTexture): Group {
   const g = new Group();
   const top = new Mesh(new BoxGeometry(5.4, 0.1, 1.3), surface(PALETTE.deskTop, { rough: 0.5, metal: 0.3 }));
   top.position.set(0, 0.95, 2.2);
@@ -308,13 +308,22 @@ function buildDesk(): Group {
 
   const deskScreenColors = [0x2bd4ff, 0x39ff9e, 0xffb347];
   [-1.7, 0, 1.7].forEach((x, i) => {
-    // Two small angled monitors per station.
+    // Two small angled monitors per station. The switcher's left monitor mirrors
+    // the film-leader countdown.
     for (const dx of [-0.42, 0.42]) {
       const bezel = new Mesh(new BoxGeometry(0.7, 0.46, 0.04), surface(0x0a0c10, { metal: 0.4 }));
       bezel.position.set(x + dx, 1.3, 1.62);
       bezel.rotation.x = -0.12;
       g.add(bezel);
-      const face = screenFace(0.62, 0.38, deskScreenColors[i], 0.7);
+      let face: Mesh;
+      if (i === 1 && dx === -0.42) {
+        face = new Mesh(
+          new PlaneGeometry(0.62, 0.38),
+          new MeshBasicMaterial({ map: countdown, toneMapped: false }),
+        );
+      } else {
+        face = screenFace(0.62, 0.38, deskScreenColors[i], 0.7);
+      }
       face.position.set(x + dx, 1.3, 1.643);
       face.rotation.x = -0.12;
       g.add(face);
@@ -566,7 +575,7 @@ export function startControlRoom(hero: HTMLElement): void {
   room.add(ceiling);
 
   const countdown = makeCountdown();
-  room.add(buildDesk());
+  room.add(buildDesk(countdown.texture));
   room.add(buildMultiviewer(countdown.texture));
 
   // Operators: media (cyan), switcher (green), camera (violet).
