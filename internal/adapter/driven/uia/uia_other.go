@@ -9,15 +9,20 @@ import (
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/port"
 )
 
-// Controller is a stub on non-Windows platforms; UI Automation is Windows-only.
-type Controller struct{}
+// Engine is a stub on non-Windows platforms; UI Automation is Windows-only.
+type Engine struct{}
 
-// New returns the stub controller.
-func New() *Controller { return &Controller{} }
+// New returns the stub engine.
+func New() *Engine { return &Engine{} }
 
 // Control reports that UIA control is unavailable off Windows.
-func (c *Controller) Control(domain.Profile, domain.Window, domain.KeyName) error {
+func (e *Engine) Control(domain.Profile, domain.Window, domain.KeyName) error {
 	return fmt.Errorf("uia control is only supported on Windows")
 }
 
-var _ port.PlayerController = (*Controller)(nil)
+// Name reports that UIA reads are unavailable off Windows.
+func (e *Engine) Name(uintptr, string) (string, error) {
+	return "", fmt.Errorf("uia is only supported on Windows")
+}
+
+var _ port.PlayerController = (*Engine)(nil)

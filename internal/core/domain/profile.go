@@ -59,8 +59,9 @@ type ClipSourceConfig struct {
 
 // StateConfig selects and parameterizes best-effort state detection.
 type StateConfig struct {
-	Type    string // "title_regex" | "none"
-	Playing string // regex applied to the window title when Type == "title_regex"
+	Type         string // "title_regex" | "uia" | "none"
+	Playing      string // regex meaning "playing": vs the window title (title_regex) or the UIA element Name (uia)
+	AutomationID string // UIA element whose Name is read when Type == "uia" (e.g. "TogglePlaybackButton")
 }
 
 // Profile is one player application's complete mapping definition.

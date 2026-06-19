@@ -47,7 +47,11 @@ profiles:
     play_toggle: true
     cue_on_navigate: true # playlist "pause" mode: navigation cues paused; Play starts it
     clip_source: { type: positional, count: 50 }
-    state: { type: none }
+    # Real play state is read from the player's toggle button: its UIA Name is
+    # "Pause" while playing and "Play" while paused. Best-effort — when the player
+    # controls are hidden or no clip is open the element is absent and the modeled
+    # state is left as-is.
+    state: { type: uia, automation_id: "TogglePlaybackButton", playing: "Pause" }
 
   # VLC: Space is a play/pause toggle (play_toggle), but 's' is a discrete stop,
   # so Stop uses the discrete stop key. VLC does not persist its live playlist to

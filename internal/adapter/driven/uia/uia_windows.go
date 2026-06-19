@@ -57,6 +57,7 @@ const (
 	// IUIAutomationElement vtable indices.
 	mElemFindFirst         = 5
 	mElemGetCurrentPattern = 16
+	mElemGetCurrentName    = 23
 	// IUIAutomationInvokePattern vtable index.
 	mInvokeInvoke = 3
 )
@@ -72,37 +73,64 @@ type variant struct {
 // methods are reached by index without uintptr arithmetic (keeps go vet happy).
 type vtable struct{ m [64]uintptr }
 
-// Controller drives a player's transport via UI Automation. Construct with New.
-type Controller struct {
+// op selects which COM action the worker performs for a request.
+type op int
+
+const (
+	opInvoke op = iota // invoke the element
+	opName             // read the element's Name
+)
+
+// Engine drives and reads a player's transport via UI Automation. It owns a COM
+// apartment on a single worker goroutine; construct with New. It serves both the
+// player-controller (invoke) and state-probe (read Name) roles.
+type Engine struct {
 	reqs chan request
 }
 
 type request struct {
+	op   op
 	hwnd uintptr
 	aid  string
-	res  chan error
+	res  chan result
 }
 
-// New starts the COM worker and returns a Controller.
-func New() *Controller {
-	c := &Controller{reqs: make(chan request)}
-	go c.worker()
-	return c
+type result struct {
+	name string
+	err  error
+}
+
+// New starts the COM worker and returns an Engine.
+func New() *Engine {
+	e := &Engine{reqs: make(chan request)}
+	go e.worker()
+	return e
 }
 
 // Control invokes the UIA element whose AutomationId the profile maps to key, on
-// the window identified by w.Handle (the target HWND).
-func (c *Controller) Control(p domain.Profile, w domain.Window, key domain.KeyName) error {
+// the window identified by w.Handle (the target HWND). Implements port.PlayerController.
+func (e *Engine) Control(p domain.Profile, w domain.Window, key domain.KeyName) error {
 	aid := p.UIA[key]
 	if aid == "" {
 		return nil // no element mapped for this action: acked no-op
 	}
-	res := make(chan error, 1)
-	c.reqs <- request{hwnd: w.Handle, aid: aid, res: res}
+	return e.do(opInvoke, w.Handle, aid).err
+}
+
+// Name reads the Name of the element with automationId under hwnd. Returns ""
+// (no error) when the element is not present (e.g. no clip open).
+func (e *Engine) Name(hwnd uintptr, automationID string) (string, error) {
+	r := e.do(opName, hwnd, automationID)
+	return r.name, r.err
+}
+
+func (e *Engine) do(o op, hwnd uintptr, aid string) result {
+	res := make(chan result, 1)
+	e.reqs <- request{op: o, hwnd: hwnd, aid: aid, res: res}
 	return <-res
 }
 
-func (c *Controller) worker() {
+func (e *Engine) worker() {
 	runtime.LockOSThread() // the COM apartment and IUIAutomation are bound to this thread
 	procCoInitializeEx.Call(0, coinitMultithreaded)
 
@@ -112,26 +140,33 @@ func (c *Controller) worker() {
 		uintptr(unsafe.Pointer(&iidIUIAutomation)), uintptr(unsafe.Pointer(&automation)))
 	if int32(hr) < 0 || automation == nil {
 		slog.Error("uia: CoCreateInstance(CUIAutomation) failed", "hr", fmt.Sprintf("0x%x", uint32(hr)))
-		for req := range c.reqs {
-			req.res <- fmt.Errorf("uia: automation unavailable")
+		for req := range e.reqs {
+			req.res <- result{err: fmt.Errorf("uia: automation unavailable")}
 		}
 		return
 	}
 
-	for req := range c.reqs {
-		req.res <- invoke(automation, req.hwnd, req.aid)
+	for req := range e.reqs {
+		switch req.op {
+		case opName:
+			name, err := getName(automation, req.hwnd, req.aid)
+			req.res <- result{name: name, err: err}
+		default:
+			req.res <- result{err: invoke(automation, req.hwnd, req.aid)}
+		}
 	}
 }
 
-// invoke finds the element with the given AutomationId under hwnd and invokes it.
-func invoke(automation unsafe.Pointer, hwnd uintptr, aid string) error {
+// findElement returns the first descendant of hwnd's element with the given
+// AutomationId, or nil if none. The caller must release a non-nil result.
+func findElement(automation unsafe.Pointer, hwnd uintptr, aid string) (unsafe.Pointer, error) {
 	if hwnd == 0 {
-		return fmt.Errorf("uia: nil window handle")
+		return nil, fmt.Errorf("uia: nil window handle")
 	}
 
 	var winEl unsafe.Pointer
 	if r := comCall(automation, mAutoElementFromHandle, hwnd, uintptr(unsafe.Pointer(&winEl))); int32(r) < 0 || winEl == nil {
-		return fmt.Errorf("uia: ElementFromHandle(0x%x) failed: 0x%x", hwnd, uint32(r))
+		return nil, fmt.Errorf("uia: ElementFromHandle(0x%x) failed: 0x%x", hwnd, uint32(r))
 	}
 	defer release(winEl)
 
@@ -141,13 +176,22 @@ func invoke(automation unsafe.Pointer, hwnd uintptr, aid string) error {
 	r := comCall(automation, mAutoCreatePropertyCondition, uintptr(uiaAutomationIdProp), uintptr(unsafe.Pointer(&v)), uintptr(unsafe.Pointer(&cond)))
 	procSysFreeString.Call(bstr)
 	if int32(r) < 0 || cond == nil {
-		return fmt.Errorf("uia: CreatePropertyCondition failed: 0x%x", uint32(r))
+		return nil, fmt.Errorf("uia: CreatePropertyCondition failed: 0x%x", uint32(r))
 	}
 	defer release(cond)
 
 	var el unsafe.Pointer
 	if r := comCall(winEl, mElemFindFirst, treeScopeDescendants, uintptr(cond), uintptr(unsafe.Pointer(&el))); int32(r) < 0 {
-		return fmt.Errorf("uia: FindFirst(%q) failed: 0x%x", aid, uint32(r))
+		return nil, fmt.Errorf("uia: FindFirst(%q) failed: 0x%x", aid, uint32(r))
+	}
+	return el, nil
+}
+
+// invoke finds the element with the given AutomationId under hwnd and invokes it.
+func invoke(automation unsafe.Pointer, hwnd uintptr, aid string) error {
+	el, err := findElement(automation, hwnd, aid)
+	if err != nil {
+		return err
 	}
 	if el == nil {
 		// No such control right now (e.g. no clip open): acked no-op.
@@ -166,6 +210,26 @@ func invoke(automation unsafe.Pointer, hwnd uintptr, aid string) error {
 		return fmt.Errorf("uia: Invoke(%q) failed: 0x%x", aid, uint32(r))
 	}
 	return nil
+}
+
+// getName reads the Name property of the element with the given AutomationId.
+func getName(automation unsafe.Pointer, hwnd uintptr, aid string) (string, error) {
+	el, err := findElement(automation, hwnd, aid)
+	if err != nil {
+		return "", err
+	}
+	if el == nil {
+		return "", nil // not present (e.g. controls hidden / no clip): not detectable
+	}
+	defer release(el)
+
+	var bstr unsafe.Pointer
+	if r := comCall(el, mElemGetCurrentName, uintptr(unsafe.Pointer(&bstr))); int32(r) < 0 || bstr == nil {
+		return "", nil
+	}
+	name := windows.UTF16PtrToString((*uint16)(bstr))
+	procSysFreeString.Call(uintptr(bstr))
+	return name, nil
 }
 
 // comCall dispatches method idx of the COM object's vtable with the given args.
@@ -191,4 +255,4 @@ func sysAllocString(s string) uintptr {
 	return r
 }
 
-var _ port.PlayerController = (*Controller)(nil)
+var _ port.PlayerController = (*Engine)(nil)

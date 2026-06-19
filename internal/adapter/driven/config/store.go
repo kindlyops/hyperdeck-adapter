@@ -64,8 +64,9 @@ type clipSchema struct {
 }
 
 type stateSchema struct {
-	Type    string `yaml:"type"`
-	Playing string `yaml:"playing"`
+	Type         string `yaml:"type"`
+	Playing      string `yaml:"playing"`
+	AutomationID string `yaml:"automation_id"`
 }
 
 func loadBytes(data []byte) ([]domain.Profile, error) {
@@ -167,7 +168,7 @@ func convert(ps profileSchema) (domain.Profile, error) {
 		PlayToggle:    ps.Toggle,
 		CueOnNavigate: ps.CueNav,
 		ClipSource:    domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
-		State:         domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
+		State:         domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing, AutomationID: ps.State.AutomationID},
 		Homing:        homing,
 	}, nil
 }

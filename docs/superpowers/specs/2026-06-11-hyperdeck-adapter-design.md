@@ -469,6 +469,12 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
     HyperDeck **TCP protocol**: `play`/`stop` toggled the player play/pause (read back via
     UIA `TogglePlaybackButton` Name `Play`↔`Pause`); `goto` stepped playlist items
     forward and back (clip 2 → clip 4 → clip 3).
+  - **State probe (`state: type: uia`)** reads real play state from the same
+    `TogglePlaybackButton` (Name "Pause" → playing, "Play" → paused) via the shared
+    UIA engine; the `stateprobe` factory builds it. Best-effort (absent element →
+    not-detected, modeled state left as-is). Verified closed-loop: pausing/playing
+    the player *externally* (bypassing the deck) was reflected in `transport info`. Reads
+    don't activate the window, so polling doesn't foreground the player (only invokes do).
   - Note on Example Player config: its playlist default action can be set to "pause"
     (cue mode) so advancing to an item cues it paused rather than auto-playing —
     appropriate for live-event cueing. Modeled via the profile flag

@@ -59,9 +59,10 @@ func main() {
 	}
 
 	session := app.NewSession()
+	uiaEngine := uia.New()
 	controller := controlRouter{
 		domain.ControlAPI: vlchttp.New(),
-		domain.ControlUIA: uia.New(),
+		domain.ControlUIA: uiaEngine,
 	}
 	deck := app.NewVirtualDeck(session, inj, app.WithController(controller))
 	clk := clock.New()
@@ -70,7 +71,7 @@ func main() {
 
 	lm := app.NewLockManager(session, inj, profiles, presenter,
 		func(p domain.Profile) port.ClipSource { return clipsource.New(p) },
-		func(p domain.Profile) port.StateProbe { return stateprobe.New(p) })
+		func(p domain.Profile) port.StateProbe { return stateprobe.New(p, uiaEngine) })
 	rec := app.NewReconciler(session)
 
 	srv := hyperdeck.NewServer(deck, deck)
