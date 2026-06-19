@@ -17,6 +17,13 @@ type WindowEnumerator interface {
 	OpenWindows() ([]domain.Window, error)
 }
 
+// PlayerController is a driven (outbound) port: perform a resolved transport
+// action on the locked player through an out-of-band control channel (e.g. an
+// HTTP API) instead of synthesizing keystrokes. Used by ControlAPI profiles.
+type PlayerController interface {
+	Control(p domain.Profile, w domain.Window, key domain.KeyName) error
+}
+
 // ClipSource is a driven port: produce the active clip list.
 type ClipSource interface {
 	List() (domain.ClipList, error)

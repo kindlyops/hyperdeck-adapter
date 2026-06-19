@@ -12,15 +12,46 @@ profiles:
   # name is "Example Player" (with a space). Verified on macOS: background injection
   # works (CGEventPostToPid), so transport control does not steal foreground
   # focus. Space toggles play/pause (hence play_toggle, and there is no discrete
-  # stop key so Stop pauses via Space). next/prev use Command on macOS per the player
-  # Library's documented shortcuts.
+  # stop key so Stop pauses via Space). next/prev use Command on macOS per
+  # Example Player's documented shortcuts.
   - id: example_player
     match: { process: ["Example Player"] }
     injection: background
     keymap: { play: "space", next: "cmd+right", prev: "cmd+left" }
     play_toggle: true
+    # Example Player's playlist default action can be set to "pause" (cue mode), so
+    # next/prev/goto cue a clip paused rather than playing it. cue_on_navigate
+    # models that: navigation leaves the deck stopped and a separate Play (Space)
+    # starts the cued clip — the live-event cueing workflow.
+    cue_on_navigate: true
     clip_source: { type: positional, count: 50 }
     state: { type: none }
+
+  # Example Player on Windows is a UWP (Store) app. It can't be driven by background
+  # keystrokes: synthesized keys are foreground-only, UWP CoreWindows ignore posted
+  # key messages, and its next/prev need a Ctrl modifier that PostMessage can't
+  # carry. Instead it's controlled via UI Automation (control: uia) — every XAML
+  # control is a UIA element we Invoke() by AutomationId. (Invoking does bring the player
+  # to the foreground; that's a UWP property, not avoidable.) The window is matched
+  # on the focusable frame: ApplicationFrameHost.exe + title_regex "Example Player".
+  # AutomationIds below are Example Player's transport buttons (verified on Windows:
+  # TogglePlaybackButton toggles play/pause, PlayNextButton / PlayPreviousButton
+  # step the playlist). No discrete stop button, so Stop pauses via the toggle.
+  - id: example_player_windows
+    match: { process: ["ApplicationFrameHost.exe"], title_regex: "Example Player" }
+    control: uia
+    uia:
+      play: "TogglePlaybackButton"
+      next: "PlayNextButton"
+      prev: "PlayPreviousButton"
+    play_toggle: true
+    cue_on_navigate: true # playlist "pause" mode: navigation cues paused; Play starts it
+    clip_source: { type: positional, count: 50 }
+    # Real play state is read from the player's toggle button: its UIA Name is
+    # "Pause" while playing and "Play" while paused. Best-effort — when the player
+    # controls are hidden or no clip is open the element is absent and the modeled
+    # state is left as-is.
+    state: { type: uia, automation_id: "TogglePlaybackButton", playing: "Pause" }
 
   # VLC: Space is a play/pause toggle (play_toggle), but 's' is a discrete stop,
   # so Stop uses the discrete stop key. VLC does not persist its live playlist to
@@ -38,6 +69,24 @@ profiles:
     clip_source: { type: positional, count: 50 }
     state: { type: title_regex, playing: ".+ - VLC media player" }
     homing: ["cmd+."]
+
+  # VLC on Windows. Process name is "vlc.exe" (confirmed via `injcheck list vlc`).
+  # VLC on Windows ignores synthesized hotkeys except play/pause (verified: n/p/s
+  # and even VLC's own SendKeys do nothing), so transport is driven out-of-band via
+  # VLC's HTTP interface (control: api) instead of key injection. Enable it in VLC:
+  # Preferences (All) > Interface > Main interfaces > check "Web", set a password
+  # under "Lua HTTP", or launch: vlc --extraintf http --http-password <pw>. The
+  # keymap entries below still declare which transport actions exist (their chord
+  # values are unused on the api path); the controller maps play->pl_play,
+  # stop->pl_stop, next->pl_next, prev->pl_previous.
+  - id: vlc_windows
+    match: { process: ["vlc.exe"], title_regex: "VLC media player" }
+    control: api
+    api: { type: vlc_http, base_url: "http://127.0.0.1:8080", password: "hdtest" }
+    keymap: { play: "space", stop: "s", next: "n", prev: "p" }
+    play_toggle: true
+    clip_source: { type: positional, count: 50 }
+    state: { type: title_regex, playing: ".+ - VLC media player" }
 
   # Mitti (macOS) has discrete cue transport keys; it needs foreground focus.
   - id: mitti

@@ -406,8 +406,82 @@ macOS uses Command (not Ctrl) for its next/prev shortcuts. See
 
 ## Open items
 
-- **Windows injector bodies** (`SendInput`/`PostMessage`/`EnumWindows`) — still
-  on-device stubs; implement and verify on Windows.
+- **Windows injector** (`SendInput`/`PostMessage`/`EnumWindows`) — **done and
+  verified.** `injector_windows.go` + pure `keymap_windows.go` (with tests).
+  Findings:
+  - `OpenWindows` (EnumWindows + visible/titled filter + Toolhelp32 pid→exe map)
+    works; `injcheck list vlc` enumerates VLC as process `vlc.exe`.
+  - `Focus` uses the foreground-lock-timeout reset + `AttachThreadInput` +
+    `SetForegroundWindow`/`SetFocus` workaround; brings a target foreground
+    reliably on an interactive (unlocked) session.
+  - `SendKeys` uses `SendInput` when the target HWND is foreground, else
+    `PostMessageW`. **Key delivery is proven**: `injcheck` typed "hello world"
+    into Notepad via `SendInput`.
+  - **Note on a locked session:** while the workstation is locked (foreground
+    owner `LockApp`), no process can take foreground or receive synthesized
+    input — focus and injection silently no-op. Verification requires an unlocked
+    interactive desktop.
+- **VLC on Windows → HTTP API control, not key injection** — **done and verified
+  end-to-end.** VLC on Windows honors *only* play/pause (`space`) from synthesized
+  input; `n`/`p`/`s`/`f` and even VLC's own `SendKeys` do nothing, regardless of
+  focus/fullscreen. So VLC's transport is driven out-of-band via its HTTP
+  interface instead of the injector:
+  - New driven port `port.PlayerController` and adapter
+    `internal/adapter/driven/vlchttp` mapping `play→pl_play`, `stop→pl_stop`,
+    `next→pl_next`, `prev→pl_previous` over `requests/status.json` (Basic auth,
+    empty user). Unit-tested with `httptest`.
+  - Profiles gained `control: keys|api` (default `keys`) and an `api:` block
+    (`type: vlc_http`, `base_url`, `password`). The `vlc_windows` example uses
+    `control: api`. The keymap entries on an api profile still mark which actions
+    exist (their chord values are unused on the api path).
+  - `VirtualDeck.send`/`Rehome` dispatch to the controller when `control: api`
+    (wired via `app.WithController`); all the toggle/clip modeling is unchanged.
+  - **Verified live:** ran the real adapter headless against running VLC and drove
+    it over the HyperDeck TCP protocol — `play`→playing, `goto`→track changes via
+    next/prev, `stop`→stopped, each confirmed through VLC's HTTP `status.json`.
+- **Example Player on Windows (UWP) → UI Automation control** — profile
+  `example_player_windows` added and **verified end-to-end on Windows.** Findings:
+  - Example Player is a UWP/Store app with a split window: content is a
+    `Windows.UI.Core.CoreWindow` owned by `ExamplePlayer.exe`, but the focusable
+    top-level frame is an `ApplicationFrameWindow` owned by
+    `ApplicationFrameHost.exe`. The profile matches
+    `process: ["ApplicationFrameHost.exe"]` + `title_regex: "Example Player"`.
+  - **Background keystrokes don't work for UWP:** `SendInput` is foreground-only;
+    posting key messages to the CoreWindow is ignored; and next/prev need a Ctrl
+    modifier that `PostMessage` can't carry. (Synthesized `Space`/`Ctrl+arrow`
+    *do* work in **focus mode** — verified — but require stealing focus each key.)
+  - **Media keys / SMTC: not viable** — the player doesn't register a media session;
+    injected `VK_MEDIA_*` had no effect.
+  - **Chosen mechanism: UI Automation.** Every XAML control is a UIA element;
+    the player exposes stable AutomationIds — `TogglePlaybackButton` (play/pause),
+    `PlayNextButton`, `PlayPreviousButton` — all support `InvokePattern`. New
+    driven port backend `internal/adapter/driven/uia` (pure-syscall COM via
+    `IUIAutomation`, no cgo) invokes them. Profiles gained `control: uia` + a
+    `uia:` map of action→AutomationId; `domain.Profile.HasAction`/`UsesController`
+    make the core control-mode-aware; a `controlRouter` in the composition root
+    dispatches api→VLC-HTTP, uia→UIA.
+  - **Caveat:** invoking a UWP control activates the player (brings it foreground). That's
+    a platform property, not avoidable — UIA is still the better mechanism (no
+    modifier fragility, targets the player precisely, can read play state) but does not
+    achieve "no focus." True background control needs a player with an out-of-band
+    API (e.g. VLC over HTTP).
+  - **Verified live** by running the real adapter headless and driving it over the
+    HyperDeck **TCP protocol**: `play`/`stop` toggled the player play/pause (read back via
+    UIA `TogglePlaybackButton` Name `Play`↔`Pause`); `goto` stepped playlist items
+    forward and back (clip 2 → clip 4 → clip 3).
+  - **State probe (`state: type: uia`)** reads real play state from the same
+    `TogglePlaybackButton` (Name "Pause" → playing, "Play" → paused) via the shared
+    UIA engine; the `stateprobe` factory builds it. Best-effort (absent element →
+    not-detected, modeled state left as-is). Verified closed-loop: pausing/playing
+    the player *externally* (bypassing the deck) was reflected in `transport info`. Reads
+    don't activate the window, so polling doesn't foreground the player (only invokes do).
+  - Note on Example Player config: its playlist default action can be set to "pause"
+    (cue mode) so advancing to an item cues it paused rather than auto-playing —
+    appropriate for live-event cueing. Modeled via the profile flag
+    `cue_on_navigate: true`: next/prev/goto leave the deck stopped/cued so a
+    subsequent transport `play` fires to start the cued clip (without it the deck
+    would still be modeled as playing and `play` would be suppressed). The
+    Example Player example profiles set it.
 - **Async `5xx` notifications** — top protocol follow-up before live ATEM testing
   (see Non-goals).
 - Focus-mode `goto`/multi-key sequences re-activate (and re-settle) per keypress;

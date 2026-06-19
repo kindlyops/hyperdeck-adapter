@@ -34,12 +34,22 @@ type fileSchema struct {
 type profileSchema struct {
 	ID        string            `yaml:"id"`
 	Match     matchSchema       `yaml:"match"`
+	Control   string            `yaml:"control"`
 	Injection string            `yaml:"injection"`
+	API       apiSchema         `yaml:"api"`
+	UIA       map[string]string `yaml:"uia"`
 	Keymap    map[string]string `yaml:"keymap"`
 	Toggle    bool              `yaml:"play_toggle"`
+	CueNav    bool              `yaml:"cue_on_navigate"`
 	Clip      clipSchema        `yaml:"clip_source"`
 	State     stateSchema       `yaml:"state"`
 	Homing    []string          `yaml:"homing"`
+}
+
+type apiSchema struct {
+	Type     string `yaml:"type"`
+	BaseURL  string `yaml:"base_url"`
+	Password string `yaml:"password"`
 }
 
 type matchSchema struct {
@@ -54,8 +64,9 @@ type clipSchema struct {
 }
 
 type stateSchema struct {
-	Type    string `yaml:"type"`
-	Playing string `yaml:"playing"`
+	Type         string `yaml:"type"`
+	Playing      string `yaml:"playing"`
+	AutomationID string `yaml:"automation_id"`
 }
 
 func loadBytes(data []byte) ([]domain.Profile, error) {
@@ -78,9 +89,37 @@ func convert(ps profileSchema) (domain.Profile, error) {
 	if ps.ID == "" {
 		return domain.Profile{}, fmt.Errorf("profile missing id")
 	}
+	control := domain.ControlMode(ps.Control)
+	if control == "" {
+		control = domain.ControlKeys
+	}
+	if control != domain.ControlKeys && control != domain.ControlAPI && control != domain.ControlUIA {
+		return domain.Profile{}, fmt.Errorf("profile %q: invalid control %q (want keys|api|uia)", ps.ID, ps.Control)
+	}
+	// Injection only governs keystroke control; api profiles may omit it.
 	mode := domain.InjectionMode(ps.Injection)
-	if mode != domain.InjectionFocus && mode != domain.InjectionBackground {
+	if control == domain.ControlKeys && mode != domain.InjectionFocus && mode != domain.InjectionBackground {
 		return domain.Profile{}, fmt.Errorf("profile %q: invalid injection %q (want focus|background)", ps.ID, ps.Injection)
+	}
+	var api domain.APIConfig
+	if control == domain.ControlAPI {
+		if ps.API.Type != "vlc_http" {
+			return domain.Profile{}, fmt.Errorf("profile %q: invalid api.type %q (want vlc_http)", ps.ID, ps.API.Type)
+		}
+		api = domain.APIConfig{Type: ps.API.Type, BaseURL: ps.API.BaseURL, Password: ps.API.Password}
+	}
+	var uia map[domain.KeyName]string
+	if control == domain.ControlUIA {
+		if len(ps.UIA) == 0 {
+			return domain.Profile{}, fmt.Errorf("profile %q: uia control requires a uia: map of action -> AutomationId", ps.ID)
+		}
+		uia = make(map[domain.KeyName]string, len(ps.UIA))
+		for name, aid := range ps.UIA {
+			if aid == "" {
+				return domain.Profile{}, fmt.Errorf("profile %q: uia.%s has an empty AutomationId", ps.ID, name)
+			}
+			uia[domain.KeyName(name)] = aid
+		}
 	}
 	if len(ps.Match.Process) == 0 {
 		return domain.Profile{}, fmt.Errorf("profile %q: match.process must list at least one process name", ps.ID)
@@ -103,7 +142,11 @@ func convert(ps profileSchema) (domain.Profile, error) {
 		}
 		keymap[domain.KeyName(name)] = chord
 	}
-	if _, ok := keymap[domain.KeyPlay]; !ok {
+	if control == domain.ControlUIA {
+		if _, ok := uia[domain.KeyPlay]; !ok {
+			return domain.Profile{}, fmt.Errorf("profile %q: missing required uia.play AutomationId", ps.ID)
+		}
+	} else if _, ok := keymap[domain.KeyPlay]; !ok {
 		return domain.Profile{}, fmt.Errorf("profile %q: missing required 'play' key", ps.ID)
 	}
 	var homing []domain.Chord
@@ -115,14 +158,18 @@ func convert(ps profileSchema) (domain.Profile, error) {
 		homing = append(homing, chord)
 	}
 	return domain.Profile{
-		ID:         ps.ID,
-		Match:      domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
-		Injection:  mode,
-		Keymap:     keymap,
-		PlayToggle: ps.Toggle,
-		ClipSource: domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
-		State:      domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing},
-		Homing:     homing,
+		ID:            ps.ID,
+		Match:         domain.Match{Process: ps.Match.Process, TitleRegex: ps.Match.TitleRegex},
+		Control:       control,
+		Injection:     mode,
+		API:           api,
+		UIA:           uia,
+		Keymap:        keymap,
+		PlayToggle:    ps.Toggle,
+		CueOnNavigate: ps.CueNav,
+		ClipSource:    domain.ClipSourceConfig{Type: ps.Clip.Type, Path: ps.Clip.Path, Count: ps.Clip.Count},
+		State:         domain.StateConfig{Type: ps.State.Type, Playing: ps.State.Playing, AutomationID: ps.State.AutomationID},
+		Homing:        homing,
 	}, nil
 }
 
