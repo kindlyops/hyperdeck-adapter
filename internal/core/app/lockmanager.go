@@ -1,6 +1,7 @@
 package app
 
 import (
+	"sync"
 	"time"
 
 	"github.com/kindlyops/hyperdeck-adapter/internal/core/domain"
@@ -21,6 +22,9 @@ type LockManager struct {
 	presenter port.StatusPresenter
 	clipsFor  ClipSourceFactory
 	probeFor  StateProbeFactory
+
+	mu     sync.Mutex
+	active string // pinned profile id; "" means Auto / match any
 }
 
 // NewLockManager wires a lock manager.
@@ -32,7 +36,14 @@ func NewLockManager(
 	clipsFor ClipSourceFactory,
 	probeFor StateProbeFactory,
 ) *LockManager {
-	return &LockManager{s, w, profiles, presenter, clipsFor, probeFor}
+	return &LockManager{
+		session:   s,
+		windows:   w,
+		profiles:  profiles,
+		presenter: presenter,
+		clipsFor:  clipsFor,
+		probeFor:  probeFor,
+	}
 }
 
 // Poll runs one match cycle: lock on first match, unlock when the locked window is gone.
@@ -54,6 +65,15 @@ func (lm *LockManager) Poll() {
 	}
 }
 
+// SetActive pins the matcher to one profile id; "" restores Auto (match any).
+// It re-polls immediately so the lock state reflects the new selection.
+func (lm *LockManager) SetActive(id string) {
+	lm.mu.Lock()
+	lm.active = id
+	lm.mu.Unlock()
+	lm.Poll()
+}
+
 // Run polls on every clock tick until the channel closes.
 func (lm *LockManager) Run(clock port.Clock, every time.Duration) {
 	for range clock.Tick(every) {
@@ -62,7 +82,13 @@ func (lm *LockManager) Run(clock port.Clock, every time.Duration) {
 }
 
 func (lm *LockManager) firstMatch(windows []domain.Window) (domain.Profile, domain.Window, bool) {
+	lm.mu.Lock()
+	active := lm.active
+	lm.mu.Unlock()
 	for _, p := range lm.profiles {
+		if active != "" && p.ID != active {
+			continue
+		}
 		for _, w := range windows {
 			if p.MatchesWindow(w) {
 				return p, w, true

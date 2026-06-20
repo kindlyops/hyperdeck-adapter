@@ -85,8 +85,8 @@ func writeICO(path string, imgs []image.Image) error {
 		}
 		dir.WriteByte(wb)
 		dir.WriteByte(hb)
-		dir.WriteByte(0) // palette
-		dir.WriteByte(0) // reserved
+		dir.WriteByte(0)                                    // palette
+		dir.WriteByte(0)                                    // reserved
 		binary.Write(&dir, binary.LittleEndian, uint16(1))  // planes
 		binary.Write(&dir, binary.LittleEndian, uint16(32)) // bpp
 		binary.Write(&dir, binary.LittleEndian, uint32(len(blobs[i])))
