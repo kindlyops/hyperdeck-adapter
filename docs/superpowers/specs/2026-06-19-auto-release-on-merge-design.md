@@ -44,17 +44,29 @@ Three workflows result:
   serialize rather than race on the same tag.
 - `compute` job:
   - `actions/checkout` with `fetch-depth: 0` (full history for commit analysis).
-  - `mathieudutour/github-tag-action` with `dry_run: true` and
-    `default_bump: false`. Outputs `new_version`, `new_tag`, and a generated
+  - `mathieudutour/github-tag-action@v6.2` with `dry_run: true`,
+    `default_bump: false`, `release_branches: main`, `fetch_all_tags: true`.
+    Outputs `previous_version`, `new_version`, `new_tag`, and a generated
     `changelog`.
   - `dry_run: true` computes without creating/pushing a tag (the build creates
     the tag when it makes the release). `default_bump: false` means a merge whose
-    commits are only `docs:`/`chore:`/`style:`/etc. yields **no new version**.
-  - Bump rules (Conventional Commits): `fix:` → patch, `feat:` → minor,
-    `BREAKING CHANGE`/`!` → major. (The implementation plan must confirm the
-    action's exact behavior on the current `0.x` line — whether a breaking change
-    goes to `1.0.0` or stays in `0.x` — and pin it explicitly if a knob exists.)
-  - Job outputs: `new_tag`, `new_version`, `changelog`.
+    commits are only `docs:`/`chore:`/`style:`/etc. yields **no new version**
+    (empty `new_tag`).
+  - Bump rules (Conventional Commits, via `@semantic-release/commit-analyzer`):
+    `fix:` → patch, `feat:` → minor, `BREAKING CHANGE`/`!` → major.
+  - **Stay in `0.x` (clamp step):** the action has no `major_on_zero` option and
+    natively sends `0.1.0` + a breaking change to `1.0.0`. A bash `clamp` step
+    corrects this: when `new_tag` is non-empty, `previous_version` is `0.x`, and
+    `new_version` is **not** `0.x`, it replaces the version with a minor bump of
+    the previous version (`0.<minor>.0` → `0.<minor+1>.0`, e.g. `0.1.0` →
+    `0.2.0`) and recomputes the tag. Otherwise it passes the action's values
+    through unchanged. (The alternative — `custom_release_rules` enumerating every
+    type as minor/patch — is rejected because it would force `docs:`/`chore:`
+    merges to cut patch releases, violating the "no release on docs-only" rule.)
+    Computed with shell arithmetic on the dotted version, so no `npx`/node
+    dependency. When the maintainer is ready for `1.0.0`, the clamp is removed
+    (or bypassed with the action's `custom_tag: 1.0.0`).
+  - Job outputs (post-clamp): `new_tag`, `new_version`, `changelog`.
 - `release` job: `needs: compute`, `if: needs.compute.outputs.new_tag != ''`,
   `uses: ./.github/workflows/release.yml` with inputs
   `version`, `tag`, `notes: <changelog>`, `publish: true`. Passes
@@ -101,7 +113,7 @@ Three workflows result:
 merge PR to main (squash; PR title = commit subject)
         |
         v
-version.yml: compute (github-tag-action dry_run)
+version.yml: compute (github-tag-action dry_run -> clamp to 0.x)
         |  new_tag == "" ?
         |-- yes --> end (no release; e.g. docs-only merge)
         |-- no  -->  release.yml [workflow_call]: version, tag, notes, publish=true
@@ -151,3 +163,7 @@ workflow therefore cannot re-trigger itself or the build a second time. No
   from the commits.
 - A `docs:`-only merge produces no release.
 - A PR opened with a non-conventional title fails the `pr-title.yml` check.
+- The clamp holds 0.x: given `previous_version` `0.1.0`, a `feat!:`/`BREAKING
+  CHANGE` commit yields `0.2.0` (minor), not `1.0.0`; `feat:` yields `0.2.0`;
+  `fix:` yields `0.1.1`. Verify the clamp's shell arithmetic against these
+  before relying on it.
