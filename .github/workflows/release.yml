@@ -3,12 +3,29 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  # Manual trigger: builds <version> and creates the v<version> tag + draft release.
+  # Manual trigger: builds <version> and creates a draft v<version> release.
   workflow_dispatch:
     inputs:
       version:
         description: "Version to release, e.g. 0.1.0"
         required: true
+  # Called by version.yml on merge to main with a computed version.
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.1.0"
+        required: true
+        type: string
+      notes:
+        description: "Release body / notes (Markdown)"
+        required: false
+        type: string
+        default: ""
+      publish:
+        description: "Flip the draft to a published release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -26,15 +43,21 @@ jobs:
     steps:
       - id: v
         shell: bash
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw="${{ github.event.inputs.version }}"
+          set -euo pipefail
+          if [ -n "$IN_VERSION" ]; then
+            raw="$IN_VERSION"
           else
-            raw="${GITHUB_REF_NAME}"
+            raw="$REF_NAME"
           fi
           version="${raw#v}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
           echo "Releasing version $version (tag v$version)"
 
   create-release:
@@ -44,23 +67,30 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.setup.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       - name: Ensure draft release exists
         shell: bash
+        env:
+          IN_NOTES: ${{ inputs.notes }}
         run: |
-          notes="See the assets below to download and install.
+          set -euo pipefail
+          default_notes="See the assets below to download and install.
 
           Installers are unsigned until code-signing credentials are configured:
           macOS Gatekeeper and Windows SmartScreen may warn on first launch."
+          notes="${IN_NOTES:-$default_notes}"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists; reusing it."
           else
+            printf '%s\n' "$notes" > "$RUNNER_TEMP/notes.md"
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --draft \
               --target "$GITHUB_SHA" \
               --title "HyperDeck Adapter $TAG" \
-              --notes "$notes"
+              --notes-file "$RUNNER_TEMP/notes.md"
           fi
 
   macos:
@@ -72,6 +102,8 @@ jobs:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -135,6 +167,8 @@ jobs:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -184,6 +218,8 @@ jobs:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -224,5 +260,19 @@ jobs:
           mkdir -p dist
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*'
           rm -f dist/checksums.txt
-          ( cd dist && sha256sum * > ../checksums.txt )
+          ( cd dist && sha256sum -- * > ../checksums.txt )
           gh release upload "$TAG" checksums.txt --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish:
+    needs: [setup, checksums]
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.setup.outputs.tag }}
+    steps:
+      - name: Publish the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
