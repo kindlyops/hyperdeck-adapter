@@ -28,6 +28,9 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           dry_run: true
+          # default_bump: false is load-bearing: it makes a merge with no
+          # feat/fix/breaking commit produce an empty new_tag, which is what
+          # skips the release. Do not remove it or docs-only merges will release.
           default_bump: false
           release_branches: main
           fetch_all_tags: true
