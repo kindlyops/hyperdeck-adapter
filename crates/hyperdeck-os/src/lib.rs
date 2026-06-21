@@ -6,4 +6,6 @@
 //! keystroke injection, window enumeration, and Windows UI Automation.
 
 pub mod injector;
+#[cfg(windows)]
+pub mod uia;
 pub mod vlchttp;
