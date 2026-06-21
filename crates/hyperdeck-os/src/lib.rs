@@ -5,4 +5,5 @@
 //! the VLC HTTP controller (here), and — added behind `cfg(target_os = ...)` —
 //! keystroke injection, window enumeration, and Windows UI Automation.
 
+pub mod injector;
 pub mod vlchttp;
