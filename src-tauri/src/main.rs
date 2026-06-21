@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::Manager;
 
 use hyperdeck_core::domain::LockState;
 use hyperdeck_core::port::StatusPresenter;
