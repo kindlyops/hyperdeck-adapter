@@ -4,8 +4,27 @@ on:
   push:
     tags: ["v*"]
   # Manual trigger: builds the version in src-tauri/tauri.conf.json and creates
-  # the v<version> tag + draft release (tauri-action expands __VERSION__).
+  # a draft v<version> release (tauri-action expands __VERSION__).
   workflow_dispatch:
+  # Called by version.yml on merge to main with a computed version, which is
+  # written into tauri.conf.json at build time (not committed; tags are the
+  # source of truth).
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (written into tauri.conf.json)"
+        required: true
+        type: string
+      notes:
+        description: "Release body / notes (Markdown)"
+        required: false
+        type: string
+        default: ""
+      publish:
+        description: "Flip the draft to a published release"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -35,6 +54,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      # When called with a computed version (auto-release on merge), write it
+      # into tauri.conf.json so tauri-action tags and builds that version. Not
+      # committed back — git tags remain the source of truth.
+      - name: Set version from input
+        if: inputs.version != ''
+        shell: bash
+        env:
+          IN_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp)
+          jq --arg v "$IN_VERSION" '.version = $v' tauri.conf.json > "$tmp"
+          mv "$tmp" tauri.conf.json
+          echo "Set tauri.conf.json version to $IN_VERSION"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -117,15 +151,30 @@ jobs:
           projectPath: src-tauri
           tagName: v__VERSION__
           releaseName: "HyperDeck Adapter v__VERSION__"
-          releaseBody: |
-            See the assets below to download and install.
-
-            Installers are unsigned until code-signing credentials are
-            configured; macOS Gatekeeper and Windows SmartScreen may warn on
-            first launch.
+          releaseBody: >-
+            ${{ inputs.notes != '' && inputs.notes || 'See the assets below to download and install. Installers are unsigned until code-signing credentials are configured; macOS Gatekeeper and Windows SmartScreen may warn on first launch.' }}
           releaseDraft: true
           prerelease: false
           args: >-
             ${{ matrix.args }}
             ${{ env.UPDATER_CONFIG }}
             ${{ env.WIN_CERT_THUMBPRINT != '' && format('--config {{"bundle":{{"windows":{{"certificateThumbprint":"{0}"}}}}}}', env.WIN_CERT_THUMBPRINT) || '' }}
+
+  # Auto-release path only: flip the draft to published once both platform builds
+  # have uploaded their assets. Manual dispatch / tag-push leave publish unset, so
+  # those releases stay drafts for review.
+  publish:
+    needs: build
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Publish the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
