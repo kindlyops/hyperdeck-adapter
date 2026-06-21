@@ -123,7 +123,13 @@ mod tests {
         let injector = Arc::new(MockInjector::new());
         let session = Arc::new(Session::new());
         let mut keymap = Keymap::new();
-        keymap.insert(KeyName::Play, Chord { mods: vec![], key: "space".into() });
+        keymap.insert(
+            KeyName::Play,
+            Chord {
+                mods: vec![],
+                key: "space".into(),
+            },
+        );
         session.lock(
             Profile {
                 id: "vlc".into(),
@@ -131,7 +137,10 @@ mod tests {
                 keymap,
                 ..Default::default()
             },
-            Window { process: "vlc.exe".into(), ..Default::default() },
+            Window {
+                process: "vlc.exe".into(),
+                ..Default::default()
+            },
             None,
             None,
         );
@@ -150,7 +159,10 @@ mod tests {
         // Greeting banner: "500 connection info:" then a blank line.
         let mut banner = String::new();
         reader.read_line(&mut banner).unwrap();
-        assert!(banner.starts_with("500 connection info:"), "banner: {banner:?}");
+        assert!(
+            banner.starts_with("500 connection info:"),
+            "banner: {banner:?}"
+        );
         drain_blank(&mut reader);
 
         conn.write_all(b"play\r\n").unwrap();
