@@ -35,6 +35,47 @@ pub trait Query {
     fn device_info(&self) -> DeviceInfo;
 }
 
+// Blanket impls so a shared `Arc<Deck>` satisfies the inbound ports — the server
+// hands a cheap clone to each connection.
+impl<T: Transport + ?Sized> Transport for std::sync::Arc<T> {
+    fn play(&self) -> DeckResult<()> {
+        (**self).play()
+    }
+    fn stop(&self) -> DeckResult<()> {
+        (**self).stop()
+    }
+    fn record(&self) -> DeckResult<()> {
+        (**self).record()
+    }
+    fn goto(&self, clip_id: i32) -> DeckResult<()> {
+        (**self).goto(clip_id)
+    }
+    fn next(&self) -> DeckResult<()> {
+        (**self).next()
+    }
+    fn prev(&self) -> DeckResult<()> {
+        (**self).prev()
+    }
+    fn rehome(&self) -> DeckResult<()> {
+        (**self).rehome()
+    }
+}
+
+impl<T: Query + ?Sized> Query for std::sync::Arc<T> {
+    fn transport_info(&self) -> TransportInfo {
+        (**self).transport_info()
+    }
+    fn clips(&self) -> ClipList {
+        (**self).clips()
+    }
+    fn slot_info(&self) -> SlotInfo {
+        (**self).slot_info()
+    }
+    fn device_info(&self) -> DeviceInfo {
+        (**self).device_info()
+    }
+}
+
 /// Driven port: deliver keystrokes to a window.
 pub trait KeyInjector {
     fn focus(&self, w: &Window) -> DeckResult<()>;
