@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["crates/hyperdeck-core", "crates/hyperdeck-os"]
+# src-tauri is its own workspace (needs the desktop webview toolchain); keep it
+# out of the library workspace so the Linux CI matrix never builds webkit.
+exclude = ["src-tauri"]
 
 [workspace.package]
 edition = "2021"
