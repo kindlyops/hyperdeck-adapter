@@ -1,5 +1,18 @@
 # Auto-cut releases on merge to main
 
+> **Adaptation note (2026-06-21):** the repo migrated to Tauri v2 / Rust, which
+> replaced the Go-era `release.yml`. The architecture below is unchanged —
+> conventional-commit versioning on merge, 0.x clamp, integrated no-secret
+> hand-off, draft→publish — but the build hand-off now targets the Tauri
+> pipeline: instead of a `setup` job deriving the version from a tag, the
+> reusable `release.yml` writes the computed version into
+> `src-tauri/tauri.conf.json` at build time (not committed) and `tauri-action`
+> tags + builds it. The clamp script, `version.yml`, and `pr-title.yml` are
+> unchanged. Sections describing the Go `setup`/`create-release`/`checksums`
+> jobs and the `persist-credentials`/SC2035 hygiene are superseded by the Tauri
+> `build` job + a `publish` job that flips the draft via
+> `gh release edit --draft=false`.
+
 ## Problem
 
 Releases are cut manually today: a human pushes a `v*` tag (or runs the

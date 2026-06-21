@@ -1,5 +1,14 @@
 # Auto-cut releases on merge to main — Implementation Plan
 
+> **Adaptation note (2026-06-21):** Tasks 1 (clamp script), 3 (`version.yml`),
+> and 4 (`pr-title.yml`) were implemented as written. Task 2 was re-fit to the
+> Tauri/Rust `release.yml` that replaced the Go-era workflow during the v2
+> migration: the reusable `release.yml` now writes the computed version into
+> `src-tauri/tauri.conf.json` at build time (jq, not committed) and `tauri-action`
+> tags + builds it; a `publish` job flips the draft to published when called with
+> `publish: true`. The Go-specific Task 2 steps (setup normalization,
+> `create-release`/`checksums`, `persist-credentials`/SC2035) no longer apply.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** On every merge to main, compute the next semver from Conventional Commits and produce a published, fully-built GitHub release — staying in the 0.x range until 1.0.0 is shipped deliberately.
