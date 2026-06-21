@@ -4,6 +4,9 @@
 *.test
 *.out
 coverage.*
+# Rust / Cargo
+/target/
+
 # Local config
 /profiles.local.yaml
 /hyperdeck-adapter
