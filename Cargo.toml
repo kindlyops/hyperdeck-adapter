@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["crates/hyperdeck-core"]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/kindlyops/hyperdeck-adapter"
+
+[workspace.dependencies]
+regex = "1"
