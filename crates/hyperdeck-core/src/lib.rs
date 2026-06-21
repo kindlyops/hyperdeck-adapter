@@ -4,7 +4,11 @@
 //! domain value objects, port traits, and application services. It compiles and
 //! is fully testable without any OS-specific dependencies.
 
+pub mod app;
 pub mod domain;
 pub mod error;
 pub mod port;
 pub mod protocol;
+
+#[cfg(test)]
+mod testsupport;
