@@ -5,3 +5,6 @@
 //! is fully testable without any OS-specific dependencies.
 
 pub mod domain;
+pub mod error;
+pub mod port;
+pub mod protocol;
