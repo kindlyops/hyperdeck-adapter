@@ -7,7 +7,9 @@
 mod codes;
 mod parser;
 mod responder;
+mod server;
 
 pub use codes::*;
 pub use parser::{parse_command, Command};
 pub use responder::Responder;
+pub use server::Server;
