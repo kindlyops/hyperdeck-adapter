@@ -11,6 +11,11 @@ use crate::domain::{
 };
 use crate::error::DeckResult;
 
+/// Driven port: load validated profiles.
+pub trait ProfileStore {
+    fn load(&self) -> DeckResult<Vec<Profile>>;
+}
+
 /// The deck's command surface (driving port).
 pub trait Transport {
     fn play(&self) -> DeckResult<()>;
