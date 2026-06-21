@@ -22,3 +22,11 @@ windows = { version = "0.58", features = [
     "Win32_System_Threading",
     "Win32_System_Diagnostics_ToolHelp",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = { version = "0.24", features = ["elcapitan"] } # elcapitan: CGEvent::post_to_pid
+core-foundation = "0.10"
+objc2 = "0.5"
+# libc: NSRunningApplication::runningApplicationWithProcessIdentifier
+objc2-app-kit = { version = "0.2", features = ["NSRunningApplication", "libc"] }
+objc2-foundation = "0.2"
