@@ -3,7 +3,7 @@
 
 mod backend;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -63,22 +63,34 @@ fn run_tray() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            // The disabled status line lives in the tray menu (built below); the
+            // presenter updates it, so share a slot it can reach once it exists.
+            let status_item: StatusSlot = Arc::new(Mutex::new(None));
             let presenter: Arc<dyn StatusPresenter + Send + Sync> = Arc::new(TrayPresenter {
                 app: app.handle().clone(),
+                status_item: status_item.clone(),
             });
             let backend = backend::start(presenter, BIND, POLL)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
-            build_tray(app, backend)?;
+            build_tray(app, backend, status_item)?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running HyperDeck Adapter");
 }
 
-/// Builds the system-tray menu: a Profile submenu (Auto + one entry per profile),
-/// Re-home, Check for Updates…, and Quit.
-fn build_tray(app: &tauri::App, backend: backend::Backend) -> tauri::Result<()> {
+/// A shared handle to the disabled status menu line, populated once the tray is
+/// built so the [`TrayPresenter`] can update it from the poll thread.
+type StatusSlot = Arc<Mutex<Option<MenuItem<tauri::Wry>>>>;
+
+/// Builds the system-tray menu: a disabled status line, a Profile submenu (Auto +
+/// one entry per profile), Re-home, Check for Updates…, and Quit.
+fn build_tray(
+    app: &tauri::App,
+    backend: backend::Backend,
+    status_item: StatusSlot,
+) -> tauri::Result<()> {
     use hyperdeck_core::port::Transport;
 
     let backend::Backend {
@@ -88,6 +100,17 @@ fn build_tray(app: &tauri::App, backend: backend::Backend) -> tauri::Result<()> 
         profile_ids,
         active,
     } = backend;
+
+    // Disabled line at the top showing the current player lock; the presenter
+    // updates its text as the lock changes.
+    let status = MenuItem::with_id(
+        app,
+        "status",
+        status_text(&LockState::default()),
+        false,
+        None::<&str>,
+    )?;
+    *status_item.lock().unwrap() = Some(status.clone());
 
     // Profile submenu: "Auto (match any)" plus one checkbox per profile id, with
     // the checkmark on the persisted selection (Auto when none / unknown).
@@ -127,7 +150,8 @@ fn build_tray(app: &tauri::App, backend: backend::Backend) -> tauri::Result<()> 
         checks.push((id.clone(), profile_items[i + 1].clone()));
     }
 
-    let sep = PredefinedMenuItem::separator(app)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
     let rehome = MenuItem::with_id(app, "rehome", "Re-home", true, None::<&str>)?;
     let check = MenuItem::with_id(
         app,
@@ -137,7 +161,10 @@ fn build_tray(app: &tauri::App, backend: backend::Backend) -> tauri::Result<()> 
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&profile_menu, &sep, &rehome, &check, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&status, &sep1, &profile_menu, &sep2, &rehome, &check, &quit],
+    )?;
 
     let icon = app.default_window_icon().expect("bundle icon").clone();
     TrayIconBuilder::with_id("main")
@@ -221,17 +248,32 @@ async fn check_for_updates(app: tauri::AppHandle) {
     }
 }
 
-/// Reflects lock status in the tray tooltip.
+/// Reflects lock status in the tray: the disabled status menu line, the tooltip,
+/// and (on macOS, where tray titles render) a lock indicator.
 struct TrayPresenter {
     app: tauri::AppHandle,
+    status_item: StatusSlot,
 }
 
 impl StatusPresenter for TrayPresenter {
     fn present(&self, lock: &LockState) {
         let text = status_text(lock);
+        if let Some(item) = self.status_item.lock().unwrap().as_ref() {
+            let _ = item.set_text(&text);
+        }
         if let Some(tray) = self.app.tray_by_id("main") {
             let _ = tray.set_tooltip(Some(&text));
+            let _ = tray.set_title(Some(lock_indicator(lock.locked)));
         }
+    }
+}
+
+/// The menu-bar lock indicator (rendered on macOS): filled when locked.
+fn lock_indicator(locked: bool) -> &'static str {
+    if locked {
+        "HD●"
+    } else {
+        "HD○"
     }
 }
 
