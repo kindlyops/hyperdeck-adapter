@@ -4,13 +4,102 @@ on:
   push:
     tags: ["v*"]
   # Manual trigger: builds the version in src-tauri/tauri.conf.json and creates
-  # the v<version> tag + draft release (tauri-action expands __VERSION__).
+  # a draft v<version> release.
   workflow_dispatch:
+  # Called by version.yml on merge to main with a computed version, which is
+  # written into tauri.conf.json at build time (not committed; tags are the
+  # source of truth).
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (written into tauri.conf.json)"
+        required: true
+        type: string
+      notes:
+        description: "Release body / notes (Markdown)"
+        required: false
+        type: string
+        default: ""
+      publish:
+        description: "Flip the draft to a published release"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
 jobs:
+  # Pre-create the draft release once so the parallel matrix builds upload to it
+  # by releaseId. Creating-by-tag from multiple matrix jobs races and can produce
+  # duplicate/partial releases (tauri-action#914), which is unsafe on the
+  # auto-publish path.
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      # Resolve the version for every trigger: workflow_call input, then a pushed
+      # v* tag, else the committed tauri.conf.json version (manual dispatch).
+      - id: v
+        shell: bash
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "$IN_VERSION" ]; then
+            version="$IN_VERSION"
+          elif [ "${GH_REF#refs/tags/v}" != "$GH_REF" ]; then
+            version="${GH_REF#refs/tags/v}"
+          else
+            version="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $version"
+
+      - id: create
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          IN_NOTES: ${{ inputs.notes }}
+        with:
+          script: |
+            const version = process.env.VERSION;
+            const tag = `v${version}`;
+            const notes = (process.env.IN_NOTES && process.env.IN_NOTES.length)
+              ? process.env.IN_NOTES
+              : 'See the assets below to download and install.\n\nInstallers are unsigned until code-signing credentials are configured; macOS Gatekeeper and Windows SmartScreen may warn on first launch.';
+            const { owner, repo } = context.repo;
+            // Reuse an existing release for this tag so re-runs are idempotent
+            // (listReleases includes drafts; getReleaseByTag does not).
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            const existing = releases.find((r) => r.tag_name === tag);
+            if (existing) {
+              core.info(`Reusing existing release ${existing.id} for ${tag}`);
+              return existing.id;
+            }
+            const { data } = await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: `HyperDeck Adapter ${tag}`,
+              body: notes,
+              draft: true,
+              prerelease: false,
+            });
+            core.info(`Created draft release ${data.id} for ${tag}`);
+            return data.id;
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -32,9 +121,23 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+
+      # Build the resolved version so the bundle/installer version matches the
+      # release tag on every trigger. Not committed — git tags are the source of
+      # truth.
+      - name: Set version
+        shell: bash
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp)
+          jq --arg v "$VERSION" '.version = $v' tauri.conf.json > "$tmp"
+          mv "$tmp" tauri.conf.json
+          echo "Set tauri.conf.json version to $VERSION"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -109,23 +212,38 @@ jobs:
             echo "No Apple signing identity configured: app will be ad-hoc signed."
           fi
 
-      - name: Build and publish draft release
+      # Uploads bundles to the pre-created draft release by id (no tag race).
+      - name: Build and upload bundles
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: src-tauri
-          tagName: v__VERSION__
-          releaseName: "HyperDeck Adapter v__VERSION__"
-          releaseBody: |
-            See the assets below to download and install.
-
-            Installers are unsigned until code-signing credentials are
-            configured; macOS Gatekeeper and Windows SmartScreen may warn on
-            first launch.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: >-
             ${{ matrix.args }}
             ${{ env.UPDATER_CONFIG }}
             ${{ env.WIN_CERT_THUMBPRINT != '' && format('--config {{"bundle":{{"windows":{{"certificateThumbprint":"{0}"}}}}}}', env.WIN_CERT_THUMBPRINT) || '' }}
+
+  # Auto-release path only: flip the draft to published once both platform builds
+  # have uploaded their assets. Manual dispatch / tag-push leave publish unset, so
+  # those releases stay drafts for review.
+  publish:
+    needs: [create-release, build]
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false,
+            });
+            core.info(`Published release ${process.env.RELEASE_ID}`);
