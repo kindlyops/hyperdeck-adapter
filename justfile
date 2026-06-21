@@ -3,73 +3,45 @@
 
 # default address the adapter listens on (HyperDeck protocol port)
 bind := "127.0.0.1:9993"
-profiles := "examples/profiles.yaml"
 
 # show available recipes
 default:
     @just --list
 
-# build both binaries into ./bin
-build:
-    go build -o bin/hyperdeck-adapter ./cmd/hyperdeck-adapter
-    go build -o bin/injcheck ./cmd/injcheck
-
-# run the full test suite with the race detector
+# check + lint + test the Rust library crates (the OS-independent core + adapters)
 test:
-    go test ./... -race -count=1
-
-# vet + gofmt check (no changes)
-check:
-    go vet ./...
-    @test -z "$(gofmt -l .)" || (echo "gofmt needed:"; gofmt -l .; exit 1)
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo test --workspace
 
 # format the code in place
 fmt:
-    gofmt -w .
+    cargo fmt --all
+    cd src-tauri && cargo fmt
 
-# cross-compile sanity for the other targets (Windows + Linux)
-cross:
-    GOOS=windows GOARCH=amd64 go build ./...
-    GOOS=linux   GOARCH=amd64 go build ./...
+# build the Tauri tray app (debug). Requires the Tauri prerequisites + Tauri CLI
+# (`cargo install tauri-cli`): https://v2.tauri.app/start/prerequisites/
+build:
+    cd src-tauri && cargo tauri build --debug
+
+# run the Tauri tray app in dev mode (needs its own Accessibility grant on macOS)
+run:
+    cd src-tauri && cargo tauri dev
 
 # (macOS) trigger / check the input (Accessibility) permission for the adapter
-trust: build
-    ./bin/hyperdeck-adapter -check-accessibility
+trust:
+    cd src-tauri && cargo run -- --check-accessibility
 
-# list on-screen windows (optionally filtered): `just list vlc`
-list filter="": build
-    ./bin/injcheck list {{filter}}
+# run the adapter headless (no tray) in the foreground, locking onto a running player
+serve:
+    cd src-tauri && cargo run -- --headless
 
-# run the adapter pipeline in the foreground (headless, no tray), locking onto a running player
-serve: build
-    ./bin/hyperdeck-adapter -no-tray -config {{profiles}} -bind {{bind}}
+# injector diagnostic for on-device testing, e.g. `just injcheck list vlc` or
+# `just injcheck bgkeys 1234 space` (see the binary's --help / usage output)
+injcheck *ARGS:
+    cargo run -q -p hyperdeck-os --bin injcheck -- {{ARGS}}
 
-# stop any background headless adapter
-stop:
-    -pkill -f 'hyperdeck-adapter -no-tray'
-
-# run the real tray application (needs its own Accessibility grant on macOS)
-run: build
-    ./bin/hyperdeck-adapter -config {{profiles}} -bind {{bind}}
-
-# end-to-end demo: start the adapter and send HyperDeck commands to the locked player
-demo: build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    BIND="{{bind}}"; HOST="${BIND%:*}"; PORT="${BIND##*:}"
-    if ! ./bin/hyperdeck-adapter -check-accessibility >/dev/null 2>&1; then
-      echo "⚠️  Input permission not granted for $(pwd)/bin/hyperdeck-adapter"
-      echo "    Enable it in System Settings → Privacy & Security → Accessibility,"
-      echo "    then re-run 'just demo'. (Opening the prompt now…)"
-      ./bin/hyperdeck-adapter -check-accessibility || true
-      exit 1
-    fi
-    echo "▶ starting adapter on ${BIND} (locks onto a running player)…"
-    ./bin/hyperdeck-adapter -no-tray -config {{profiles}} -bind "${BIND}" >/tmp/hda-serve.log 2>&1 &
-    SERVE=$!
-    trap 'kill "${SERVE}" 2>/dev/null || true' EXIT
-    for _ in $(seq 1 25); do nc -z "${HOST}" "${PORT}" 2>/dev/null && break; sleep 0.2; done
-    sleep 0.4
-    sed 's/^/  [adapter] /' /tmp/hda-serve.log
-    echo
-    python3 scripts/hyperdeck-demo.py "${BIND}"
+# end-to-end demo: drive the locked player with HyperDeck protocol commands
+# (run `just serve` in another terminal first, or point at any running adapter)
+demo:
+    python3 scripts/hyperdeck-demo.py {{bind}}

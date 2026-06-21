@@ -1,10 +1,8 @@
-# Go
-/bin/
-*.exe
-*.test
-*.out
-coverage.*
+# Rust / Cargo
+/target/
+/src-tauri/target/
+/src-tauri/gen/
+
 # Local config
 /profiles.local.yaml
 /hyperdeck-adapter
-/injcheck

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HyperDeck Adapter",
+  "version": "0.1.0",
+  "identifier": "com.kindlyops.hyperdeck-adapter",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app", "nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "category": "Utility",
+    "shortDescription": "Virtual HyperDeck adapter with self-update.",
+    "longDescription": "Emulates a Blackmagic HyperDeck so hardware controllers (Bitfocus Companion, ATEM) can drive media players over the network. Runs in the system tray."
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/kindlyops/hyperdeck-adapter/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
+  }
+}

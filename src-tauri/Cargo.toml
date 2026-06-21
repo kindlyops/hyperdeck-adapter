@@ -1,0 +1,26 @@
+[package]
+name = "hyperdeck-adapter"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/kindlyops/hyperdeck-adapter"
+description = "Virtual HyperDeck adapter — Tauri tray app with self-update."
+# Its own workspace: the Tauri app needs the desktop webview toolchain (webkit
+# on Linux) that the library CI matrix intentionally avoids. It is built on
+# macOS/Windows by the dedicated `tauri` CI job and by tauri-action.
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+serde_json = "1" # required by tauri::generate_context!
+log = "0.4"
+dirs = "5"
+hyperdeck-core = { path = "../crates/hyperdeck-core" }
+hyperdeck-os = { path = "../crates/hyperdeck-os" }

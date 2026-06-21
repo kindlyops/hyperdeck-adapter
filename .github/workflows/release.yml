@@ -3,226 +3,129 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  # Manual trigger: builds <version> and creates the v<version> tag + draft release.
+  # Manual trigger: builds the version in src-tauri/tauri.conf.json and creates
+  # the v<version> tag + draft release (tauri-action expands __VERSION__).
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release, e.g. 0.1.0"
-        required: true
 
-permissions:
-  contents: write
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+permissions: {}
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.v.outputs.version }}
-      tag: ${{ steps.v.outputs.tag }}
-    steps:
-      - id: v
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw="${{ github.event.inputs.version }}"
-          else
-            raw="${GITHUB_REF_NAME}"
-          fi
-          version="${raw#v}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "Releasing version $version (tag v$version)"
-
-  create-release:
-    needs: setup
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: src-tauri
     env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ needs.setup.outputs.tag }}
+      # Updater bundle signing — release builds work without these, but the
+      # in-app updater can only verify bundles signed with your key. See issue
+      # #12 for how to generate and add them.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure draft release exists
-        shell: bash
-        run: |
-          notes="See the assets below to download and install.
-
-          Installers are unsigned until code-signing credentials are configured:
-          macOS Gatekeeper and Windows SmartScreen may warn on first launch."
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; reusing it."
-          else
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --draft \
-              --target "$GITHUB_SHA" \
-              --title "HyperDeck Adapter $TAG" \
-              --notes "$notes"
-          fi
-
-  macos:
-    needs: [setup, create-release]
-    runs-on: macos-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ needs.setup.outputs.tag }}
-      VERSION: ${{ needs.setup.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
-      - name: Build universal binaries (cgo)
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # Updater artifacts require the signing key; without it, disable them so the
+      # bundler doesn't try to sign with an empty key. Activates automatically
+      # once TAURI_SIGNING_PRIVATE_KEY is configured.
+      - name: Configure updater artifacts
+        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p build/out
-          for arch in amd64 arm64; do
-            CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -o "build/out/hyperdeck-adapter-$arch" ./cmd/hyperdeck-adapter
-            CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -o "build/out/injcheck-$arch" ./cmd/injcheck
-          done
-          lipo -create -output build/out/hyperdeck-adapter build/out/hyperdeck-adapter-amd64 build/out/hyperdeck-adapter-arm64
-          lipo -create -output build/out/injcheck build/out/injcheck-amd64 build/out/injcheck-arm64
-      - name: Assemble .app bundle
-        run: |
-          set -euo pipefail
-          APP="build/HyperDeck Adapter.app"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp build/out/hyperdeck-adapter "$APP/Contents/MacOS/hyperdeck-adapter"
-          cp build/out/injcheck "$APP/Contents/MacOS/injcheck"
-          sed "s/__VERSION__/$VERSION/g" build/macos/Info.plist > "$APP/Contents/Info.plist"
-          ICONSET=build/AppIcon.iconset
-          mkdir -p "$ICONSET"
-          for s in 16 32 64 128 256 512; do
-            sips -z $s $s build/icon/appicon.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
-            d=$((s * 2))
-            sips -z $d $d build/icon/appicon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
-          done
-          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
-      - name: Sign .app (no-op until secrets exist)
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo 'UPDATER_CONFIG=--config {"bundle":{"createUpdaterArtifacts":false}}' >> "$GITHUB_ENV"
+            echo "No updater signing key configured: updater artifacts disabled for this build."
+          fi
+
+      # --- macOS signing + notarization (no-op until secrets exist) ---
+      - name: Import Apple Developer ID certificate
+        if: matrix.platform == 'macos-latest' && env.HAS_APPLE_CERT == 'true'
         env:
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: bash build/macos/sign_app.sh "build/HyperDeck Adapter.app"
-      - name: Build DMG
         run: |
-          set -euo pipefail
-          mkdir -p dist
-          DMG="dist/hyperdeck-adapter_${VERSION}_macos_universal.dmg"
-          STAGE="$(mktemp -d)"
-          cp -R "build/HyperDeck Adapter.app" "$STAGE/"
-          ln -s /Applications "$STAGE/Applications"
-          cp LICENSE README.md "$STAGE/"
-          hdiutil create -volname "HyperDeck Adapter" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
-      - name: Notarize + staple DMG (no-op until secrets exist)
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash build/macos/notarize.sh "dist/hyperdeck-adapter_${VERSION}_macos_universal.dmg"
-      - name: Upload to draft release
-        run: gh release upload "$TAG" dist/*.dmg --repo "$GITHUB_REPOSITORY" --clobber
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security import $RUNNER_TEMP/cert.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
 
-  windows:
-    needs: [setup, create-release]
-    runs-on: windows-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ needs.setup.outputs.tag }}
-      VERSION: ${{ needs.setup.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-      - name: Build binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/win/examples dist
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o build/win/hyperdeck-adapter.exe ./cmd/hyperdeck-adapter
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o build/win/injcheck.exe ./cmd/injcheck
-          cp README.md LICENSE build/win/
-          cp examples/*.yaml build/win/examples/
-      - name: Sign binaries (no-op until secrets exist)
+      # --- Windows Authenticode (no-op until secrets exist) ---
+      - name: Import Windows code-signing certificate
+        if: matrix.platform == 'windows-latest' && env.HAS_WIN_CERT == 'true'
         shell: pwsh
         env:
+          HAS_WIN_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: ./build/windows/sign.ps1 -Paths build/win/hyperdeck-adapter.exe, build/win/injcheck.exe
-      - name: Build NSIS installer
-        shell: pwsh
         run: |
-          choco install nsis -y --no-progress
-          New-Item -ItemType Directory -Force dist | Out-Null
-          # VIProductVersion must be numeric x.x.x.x: drop any prerelease suffix.
-          $viversion = $env:VERSION -replace '-.*$', ''
-          $out = "dist\hyperdeck-adapter_${env:VERSION}_windows_amd64-setup.exe"
-          # /NOCD keeps makensis in the repo root so relative paths resolve.
-          & "C:\Program Files (x86)\NSIS\makensis.exe" /NOCD `
-            "/DVERSION=$env:VERSION" "/DVIVERSION=$viversion" "/DOUTFILE=$out" build\windows\installer.nsi
-          if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit $LASTEXITCODE" }
-      - name: Sign installer (no-op until secrets exist)
-        shell: pwsh
+          $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $pwd = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pwd
+          echo "WIN_CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+
+      # Tauri treats a set-but-empty APPLE_SIGNING_IDENTITY as "sign with identity
+      # \"\"" and fails; only export the Apple env when secrets exist so unsigned
+      # builds fall back to ad-hoc signing.
+      - name: Configure Apple signing
+        if: matrix.platform == 'macos-latest'
+        shell: bash
         env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: ./build/windows/sign.ps1 -Paths "dist/hyperdeck-adapter_${env:VERSION}_windows_amd64-setup.exe"
-      - name: Upload to draft release
-        shell: bash
-        run: gh release upload "$TAG" dist/*.exe --repo "$GITHUB_REPOSITORY" --clobber
+          SECRET_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$SECRET_APPLE_SIGNING_IDENTITY" ]; then
+            {
+              echo "APPLE_SIGNING_IDENTITY=$SECRET_APPLE_SIGNING_IDENTITY"
+              echo "APPLE_ID=$SECRET_APPLE_ID"
+              echo "APPLE_PASSWORD=$SECRET_APPLE_PASSWORD"
+              echo "APPLE_TEAM_ID=$SECRET_APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+          else
+            echo "No Apple signing identity configured: app will be ad-hoc signed."
+          fi
 
-  linux:
-    needs: [setup, create-release]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ needs.setup.outputs.tag }}
-      VERSION: ${{ needs.setup.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Build and publish draft release
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          go-version: "1.26"
-      - name: Build binaries
-        run: |
-          set -euo pipefail
-          mkdir -p build/linux dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/linux/hyperdeck-adapter ./cmd/hyperdeck-adapter
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/linux/injcheck ./cmd/injcheck
-      - name: Build tarball
-        run: |
-          set -euo pipefail
-          STAGE="hyperdeck-adapter_${VERSION}_linux_amd64"
-          mkdir -p "build/$STAGE/examples"
-          cp build/linux/hyperdeck-adapter build/linux/injcheck "build/$STAGE/"
-          cp README.md LICENSE "build/$STAGE/"
-          cp examples/*.yaml "build/$STAGE/examples/"
-          tar -C build -czf "dist/${STAGE}.tar.gz" "$STAGE"
-      - name: Build .deb
-        run: |
-          set -euo pipefail
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-          "$(go env GOPATH)/bin/nfpm" package --config build/nfpm.yaml --packager deb --target dist/
-      - name: Upload to draft release
-        run: gh release upload "$TAG" dist/*.tar.gz dist/*.deb --repo "$GITHUB_REPOSITORY" --clobber
+          projectPath: src-tauri
+          tagName: v__VERSION__
+          releaseName: "HyperDeck Adapter v__VERSION__"
+          releaseBody: |
+            See the assets below to download and install.
 
-  checksums:
-    needs: [setup, macos, windows, linux]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ needs.setup.outputs.tag }}
-    steps:
-      - name: Generate checksums.txt from release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*'
-          rm -f dist/checksums.txt
-          ( cd dist && sha256sum * > ../checksums.txt )
-          gh release upload "$TAG" checksums.txt --repo "$GITHUB_REPOSITORY" --clobber
+            Installers are unsigned until code-signing credentials are
+            configured; macOS Gatekeeper and Windows SmartScreen may warn on
+            first launch.
+          releaseDraft: true
+          prerelease: false
+          args: >-
+            ${{ matrix.args }}
+            ${{ env.UPDATER_CONFIG }}
+            ${{ env.WIN_CERT_THUMBPRINT != '' && format('--config {{"bundle":{{"windows":{{"certificateThumbprint":"{0}"}}}}}}', env.WIN_CERT_THUMBPRINT) || '' }}

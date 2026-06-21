@@ -2,133 +2,107 @@
 
 Emulate a Blackmagic HyperDeck so a HyperDeck controller (Bitfocus Companion, an
 ATEM switcher, a hardware remote) can drive a **local media player that has no
-network control** — by translating HyperDeck transport commands into keystrokes.
+network control** — by translating HyperDeck transport commands into keystrokes
+(or out-of-band control where keystrokes don't work).
 
 The adapter listens on TCP **9993** and speaks the HyperDeck Ethernet Protocol. It
-locks onto one running player, and turns `play` / `stop` / `goto` into the keys that
+locks onto one running player and turns `play` / `stop` / `goto` into the keys that
 player expects:
 
 ```
-HyperDeck controller ──TCP 9993──▶ hyperdeck-adapter ──keystrokes──▶ player (Example Player / VLC / Mitti)
+HyperDeck controller ──TCP 9993──▶ hyperdeck-adapter ──keystrokes/API──▶ player (Example Player / VLC / Mitti)
 ```
 
-A system-tray / menu-bar icon shows whether it is locked onto a player. Adding a new
-player is configuration, not code.
+It runs as a system-tray / menu-bar app with built-in **self-update**, and a tray
+icon shows whether it is locked onto a player. Adding a new player is configuration,
+not code.
 
 **Website:** <https://kindlyops.github.io/hyperdeck-adapter/> (source in [`site/`](site/)) — psst, type `td`.
 
+## Architecture
+
+A [Tauri](https://v2.tauri.app) v2 desktop app over a pure-Rust hexagonal core:
+
+- **`crates/hyperdeck-core`** — OS-independent domain, ports, application services
+  (Session / VirtualDeck / LockManager / Reconciler), the HyperDeck protocol
+  parser + responder + TCP server, profile/selection config, clip sources, and
+  state probes. Fully unit-tested on Linux/macOS/Windows.
+- **`crates/hyperdeck-os`** — the OS- and player-specific driven adapters behind the
+  core's traits: keystroke injection + window enumeration (macOS CoreGraphics/AppKit,
+  Windows WinAPI), Windows UI Automation, and the VLC HTTP controller.
+- **`src-tauri`** — the tray app: wires the core to the OS adapters, owns the tray
+  menu, and provides self-update via `tauri-plugin-updater`.
+
 ## Status
 
-- **macOS** — injector implemented and verified live against **Example Player** and
-  **VLC** (foreground and background keystroke injection).
-- **Windows** — injector not yet implemented; there is a handoff spec at
-  [`docs/superpowers/specs/2026-06-12-windows-injector-handoff.md`](docs/superpowers/specs/2026-06-12-windows-injector-handoff.md).
-  The transport logic is platform-agnostic and ready; only the OS keystroke backend
-  is pending.
-- **Linux / CI** — the whole core, protocol, and adapters build and test with a
-  no-op injector, so almost everything is developed and tested off-Windows.
-
-Design docs live in [`docs/superpowers/specs/`](docs/superpowers/specs/).
-
-## Requirements
-
-- [Go](https://go.dev) 1.23+ (developed on 1.26).
-- [`just`](https://github.com/casey/just) for the task runner.
-- macOS to drive a real player today (the injector uses CoreGraphics / AppKit).
-- Python 3 for the demo client (`scripts/hyperdeck-demo.py`).
-
-On macOS the adapter needs the **Accessibility** (input) permission to deliver
-keystrokes — see [Permissions](#permissions-macos).
+- **macOS / Windows** — injection, window enumeration, and (Windows) UI Automation
+  are implemented in Rust and compile on each platform; end-to-end behavior is
+  validated on hardware (see the testing handoff issues).
+- The OS-independent core, protocol, config, clip sources, and the VLC HTTP
+  controller are unit-tested in CI on all three platforms.
 
 ## Install
 
 Prebuilt installers are attached to each [GitHub release](https://github.com/kindlyops/hyperdeck-adapter/releases):
 
-- **macOS** — `…_macos_universal.dmg` (universal arm64 + Intel). Open it and drag
-  **HyperDeck Adapter.app** to Applications. It runs as a menu-bar app.
-- **Windows** — `…_windows_amd64-setup.exe` (NSIS installer). Adds a Start-menu
-  shortcut.
-- **Linux** — `…_linux_amd64.tar.gz` or the `.deb` (`sudo apt install ./hyperdeck-adapter_*_amd64.deb`).
-  Headless only — the tray/injector are no-ops on Linux.
+- **macOS** — `…_universal.dmg` (arm64 + Intel). Drag **HyperDeck Adapter.app** to
+  Applications; it runs as a menu-bar app.
+- **Windows** — NSIS `-setup.exe` (or `.msi`). Adds a Start-menu shortcut.
+
+Once installed, the app checks for and installs updates itself (tray → **Check for
+Updates…**).
 
 > Installers are unsigned until code-signing credentials are configured, so macOS
-> Gatekeeper and Windows SmartScreen may warn on first launch. Verify downloads
-> against `checksums.txt` on the release.
+> Gatekeeper and Windows SmartScreen may warn on first launch.
 
-## Quick demo
+## Development
 
-1. Open a player and start a playlist — e.g. **Example Player** or **VLC** with a few
-   items queued.
-2. From the repo root:
+Requirements:
 
-   ```sh
-   just demo
-   ```
+- [Rust](https://rustup.rs) (stable).
+- The [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+  OS, plus the Tauri CLI: `cargo install tauri-cli`.
+- [`just`](https://github.com/casey/just) for the task runner.
+- Python 3 for the demo client (`scripts/hyperdeck-demo.py`).
 
-   This builds the binaries, starts the adapter (which locks onto the running
-   player), sends a scripted HyperDeck sequence (`play` → idempotent `play` → `stop`
-   → next / next / previous, with `transport info` readouts), then stops the adapter.
+```sh
+just test     # fmt check + clippy + tests for the library crates
+just run      # run the tray app in dev mode (cargo tauri dev)
+just serve    # run headless (no tray) in the foreground
+just demo     # drive the locked player with a scripted HyperDeck sequence
+just trust    # (macOS) prompt for / verify the Accessibility permission
+```
 
-3. **Watch the player respond.** If macOS prompts for Accessibility, enable
-   `bin/hyperdeck-adapter` in **System Settings → Privacy & Security → Accessibility**
-   and re-run `just demo`.
+On macOS the adapter needs the **Accessibility** (input) permission to deliver
+keystrokes; it prompts on first run (enable it under **System Settings → Privacy &
+Security → Accessibility**).
+
+To verify the real OS injector against a running player during on-device testing,
+use the `injcheck` diagnostic — it lists windows and sends key chords directly:
+
+```sh
+just injcheck list [filter]          # list on-screen windows
+just injcheck focus <pid>            # bring an app to the foreground
+just injcheck keys   <pid> <chord…>  # focus, then send chords (foreground)
+just injcheck bgkeys <pid> <chord…>  # send chords without stealing focus
+```
 
 ## Running it for real
 
-Run the adapter continuously and point a HyperDeck controller at the machine:
-
-```sh
-# headless (no tray) on all interfaces, port 9993
-./bin/hyperdeck-adapter -no-tray -config examples/profiles.yaml -bind 0.0.0.0:9993
-
-# or the tray application (macOS menu-bar icon)
-just run
-```
-
-Then in Bitfocus Companion (or ATEM Software Control, etc.) add a HyperDeck at this
-machine's IP on port 9993. Transport buttons will drive the locked-on player.
-
-> The `just serve` / `just demo` recipes default to `127.0.0.1:9993` for local use.
-> For a controller on another machine, bind `0.0.0.0:9993` as shown above.
-
-## `just` commands
-
-| Command | What it does |
-|---|---|
-| `just` | list all recipes |
-| `just build` | build `hyperdeck-adapter` + `injcheck` into `./bin` |
-| `just test` | run the full test suite with the race detector |
-| `just check` | `go vet` + `gofmt` check (no changes) |
-| `just fmt` | format the code in place |
-| `just cross` | cross-compile sanity for Windows + Linux |
-| `just trust` | (macOS) prompt for / verify the input permission |
-| `just list [filter]` | list on-screen windows, e.g. `just list vlc` |
-| `just serve` | run the adapter headless in the foreground (Ctrl-C to stop) |
-| `just demo` | the end-to-end demo above |
-| `just stop` | stop a running headless adapter |
-| `just run` | run the tray application |
-
-Override the address or config per invocation (assignments come **before** the
-recipe name):
-
-```sh
-just bind=0.0.0.0:9993 serve
-just bind=127.0.0.1:9993 demo
-just profiles=/path/to/profiles.yaml serve
-```
+Run the app (tray or `--headless`) and point a HyperDeck controller at the machine's
+IP on port **9993** in Bitfocus Companion (or ATEM Software Control, etc.). Transport
+buttons drive the locked-on player. The adapter binds `0.0.0.0:9993`.
 
 ## Configuration
 
-Players are defined in a YAML profile file. See
+Players are defined in a YAML profile file; see
 [`examples/profiles.yaml`](examples/profiles.yaml) for working **Example Player**,
-**VLC**, and **Mitti** profiles. Copy it to the OS config directory the adapter reads
-by default:
+**VLC**, and **Mitti** profiles. The default file is seeded on first run at:
 
 - macOS: `~/Library/Application Support/hyperdeck-adapter/profiles.yaml`
 - Windows: `%AppData%\hyperdeck-adapter\profiles.yaml`
 
-Each profile declares how to recognize the player's window, its keymap, the injection
-mode, and how clips are reported. A minimal example:
+A minimal example:
 
 ```yaml
 profiles:
@@ -141,76 +115,19 @@ profiles:
     state: { type: title_regex, playing: ".+ - VLC media player" }
 ```
 
-To add an app: run it, find its window/process name with `just list <name>`, and add
-a profile. Player keyboard shortcuts differ by OS (macOS apps often use ⌘ where
-Windows uses Ctrl), so set keys for the platform you run on.
-
-## Diagnostics (`injcheck`)
-
-`injcheck` is a small tool for verifying the OS injector against a running app — it is
-how the macOS injector was validated and how the Windows one will be:
-
-```sh
-just build
-./bin/injcheck list vlc          # find a window (HANDLE / PROCESS / TITLE)
-./bin/injcheck focus  <handle>   # bring it to the foreground
-./bin/injcheck keys   <handle> space cmd+right   # focus then send keys
-./bin/injcheck bgkeys <handle> space             # send without focusing (background)
-./bin/injcheck trust             # (macOS) check/prompt the input permission
-```
-
-On macOS `HANDLE` is the process id; on Windows it is the window handle.
-
-## Permissions (macOS)
-
-Synthesized keystrokes require the **Accessibility** permission. The adapter prompts
-on launch; enable the binary in **System Settings → Privacy & Security →
-Accessibility**. `just trust` triggers the prompt and reports the current state.
-
-Window enumeration and matching by process name need no special permission. Reading
-window *titles* (used by `state: title_regex`) may require Screen Recording on recent
-macOS; the bundled profiles avoid depending on it where possible.
-
-## Project layout
-
-```
-cmd/hyperdeck-adapter/   the adapter (tray app / -no-tray headless)
-cmd/injcheck/            injector diagnostics
-internal/core/           the hexagon: domain, ports, application services (pure)
-internal/adapter/driving/hyperdeck/   TCP protocol server (driving adapter)
-internal/adapter/driven/              injector, clipsource, stateprobe, config, tray, clock
-examples/profiles.yaml   sample player profiles
-scripts/hyperdeck-demo.py  the demo's HyperDeck client
-docs/superpowers/specs/  design + handoff specs
-```
-
-The architecture is hexagonal: a pure core surrounded by adapters. The only
-OS-specific code is the injector, behind one interface with `windows` / `darwin` /
-no-op implementations — which is what lets the rest build and test on any platform.
+Profiles also support out-of-band control: `control: api` (VLC's HTTP interface) and
+`control: uia` (Windows UI Automation for UWP apps). The pinned-profile selection is
+persisted to `selection.json` alongside the config.
 
 ## Releasing (maintainers)
 
 Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-on a native macOS + Windows + Linux matrix (macOS needs a real runner for its cgo
-injector). To cut a release, push a `vX.Y.Z` tag:
+via [`tauri-action`](https://github.com/tauri-apps/tauri-action) on a macOS + Windows
+matrix. Bump `version` in `src-tauri/tauri.conf.json`, then push a `vX.Y.Z` tag (or
+run **Actions → Release → Run workflow**). It creates a **draft** release with the
+DMG / NSIS / MSI bundles and, once the updater signing key is set, `latest.json`.
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-The workflow creates a **draft** GitHub release and attaches the macOS `.dmg`,
-Windows `-setup.exe`, Linux `.tar.gz` + `.deb`, and `checksums.txt`. Review and
-publish the draft. You can also run it manually (**Actions → Release →
-Run workflow**) with a version number, which creates the tag for you.
-
-Packaging assets live under [`build/`](build/): the app icon
-(`cd build && go run gen_appicon.go` regenerates `icon/appicon.png` +
-`icon/app.ico`), the macOS `Info.plist`, the NSIS installer script, and the nfpm
-`.deb` config.
-
-**Code signing** is wired up but inert until secrets are set, so unsigned releases
-work out of the box. Add these repository secrets to activate it:
-
-- macOS: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`
-  (signing) and `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` (notarization).
-- Windows: `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` (Authenticode).
+**Signing keys and the updater key are maintainer-owned and must be added manually**
+— see the "Maintainer setup: signing keys & secrets" issue. Until then, releases are
+unsigned and the in-app updater won't verify (the release workflow disables updater
+artifacts automatically when no signing key is present).
