@@ -5,10 +5,13 @@
 //! is fully testable without any OS-specific dependencies.
 
 pub mod app;
+pub mod clipsource;
+pub mod config;
 pub mod domain;
 pub mod error;
 pub mod port;
 pub mod protocol;
+pub mod stateprobe;
 
 #[cfg(test)]
 mod testsupport;

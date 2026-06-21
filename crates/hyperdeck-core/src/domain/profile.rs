@@ -27,6 +27,22 @@ impl KeyName {
             KeyName::Prev => "prev",
         }
     }
+
+    /// Parses a config action token into a known [`KeyName`].
+    ///
+    /// Returns `None` for actions the deck does not model (e.g. Mitti's
+    /// `"pause"`); such entries are accepted but unused, matching the Go config
+    /// where `KeyName` is an open string type.
+    pub fn parse(token: &str) -> Option<KeyName> {
+        match token {
+            "play" => Some(KeyName::Play),
+            "stop" => Some(KeyName::Stop),
+            "record" => Some(KeyName::Record),
+            "next" => Some(KeyName::Next),
+            "prev" => Some(KeyName::Prev),
+            _ => None,
+        }
+    }
 }
 
 /// Selects how keystrokes reach the target window.
