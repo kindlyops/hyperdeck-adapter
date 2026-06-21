@@ -21,10 +21,9 @@ use hyperdeck_core::{clipsource, stateprobe};
 use hyperdeck_os::injector;
 use hyperdeck_os::vlchttp::VlcController;
 
-/// Handles the UI needs once the backend is running. `lock_manager`, `selection`,
-/// `profile_ids`, and `active` are consumed by the tray profile submenu (added
-/// next); `deck` powers Re-home today.
-#[allow(dead_code)]
+/// Handles the UI needs once the backend is running: `deck` powers Re-home, and
+/// `lock_manager` / `selection` / `profile_ids` / `active` drive the tray Profile
+/// submenu (pin a profile, persist it, move the checkmark).
 pub struct Backend {
     pub deck: Arc<VirtualDeck>,
     pub lock_manager: Arc<LockManager>,
