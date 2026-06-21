@@ -15,13 +15,22 @@ mod keymap_windows;
 #[cfg(windows)]
 mod windows_impl;
 
+#[cfg(target_os = "macos")]
+mod keymap_darwin;
+#[cfg(target_os = "macos")]
+mod macos_impl;
+
 /// Returns the platform key injector.
 pub fn injector() -> Arc<dyn KeyInjector + Send + Sync> {
     #[cfg(windows)]
     {
         Arc::new(windows_impl::WinInput)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        Arc::new(macos_impl::MacInjector)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         Arc::new(Noop)
     }
@@ -33,7 +42,11 @@ pub fn enumerator() -> Arc<dyn WindowEnumerator + Send + Sync> {
     {
         Arc::new(windows_impl::WinInput)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        Arc::new(macos_impl::MacInjector)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         Arc::new(Noop)
     }
@@ -43,14 +56,21 @@ pub fn enumerator() -> Arc<dyn WindowEnumerator + Send + Sync> {
 /// cannot. Only macOS gates this (Accessibility permission); elsewhere input is
 /// always permitted, so this returns `true`.
 pub fn request_accessibility() -> bool {
-    true
+    #[cfg(target_os = "macos")]
+    {
+        macos_impl::request_accessibility()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
 }
 
 /// No-op injector/enumerator for platforms without an implementation yet.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 struct Noop;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl KeyInjector for Noop {
     fn focus(&self, _w: &hyperdeck_core::domain::Window) -> hyperdeck_core::error::DeckResult<()> {
         Ok(())
@@ -64,7 +84,7 @@ impl KeyInjector for Noop {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl WindowEnumerator for Noop {
     fn open_windows(
         &self,
