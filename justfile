@@ -36,6 +36,11 @@ trust:
 serve:
     cd src-tauri && cargo run -- --headless
 
+# injector diagnostic for on-device testing, e.g. `just injcheck list vlc` or
+# `just injcheck bgkeys 1234 space` (see the binary's --help / usage output)
+injcheck *ARGS:
+    cargo run -q -p hyperdeck-os --bin injcheck -- {{ARGS}}
+
 # end-to-end demo: drive the locked player with HyperDeck protocol commands
 # (run `just serve` in another terminal first, or point at any running adapter)
 demo:

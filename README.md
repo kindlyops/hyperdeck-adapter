@@ -77,6 +77,16 @@ On macOS the adapter needs the **Accessibility** (input) permission to deliver
 keystrokes; it prompts on first run (enable it under **System Settings → Privacy &
 Security → Accessibility**).
 
+To verify the real OS injector against a running player during on-device testing,
+use the `injcheck` diagnostic — it lists windows and sends key chords directly:
+
+```sh
+just injcheck list [filter]          # list on-screen windows
+just injcheck focus <pid>            # bring an app to the foreground
+just injcheck keys   <pid> <chord…>  # focus, then send chords (foreground)
+just injcheck bgkeys <pid> <chord…>  # send chords without stealing focus
+```
+
 ## Running it for real
 
 Run the app (tray or `--headless`) and point a HyperDeck controller at the machine's
