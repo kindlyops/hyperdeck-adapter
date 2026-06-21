@@ -7,9 +7,9 @@
 
 use std::sync::Mutex;
 
-use crate::domain::{Chord, Window};
+use crate::domain::{Chord, ClipList, LockState, TransportState, Window};
 use crate::error::DeckResult;
-use crate::port::{KeyInjector, WindowEnumerator};
+use crate::port::{ClipSource, KeyInjector, StateProbe, StatusPresenter, WindowEnumerator};
 
 /// One recorded `send_keys` call.
 #[derive(Debug, Clone)]
@@ -97,5 +97,57 @@ impl WindowEnumerator for MockInjector {
             return Err(crate::error::DeckError::Other(e.clone()));
         }
         Ok(g.windows.clone())
+    }
+}
+
+/// Records the most recent lock state pushed to it (port of `fakePresenter`).
+#[derive(Default)]
+pub struct FakePresenter {
+    last: Mutex<Option<LockState>>,
+}
+
+impl FakePresenter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The most recently presented lock state, if any.
+    pub fn last(&self) -> Option<LockState> {
+        self.last.lock().unwrap().clone()
+    }
+}
+
+impl StatusPresenter for FakePresenter {
+    fn present(&self, lock: &LockState) {
+        *self.last.lock().unwrap() = Some(lock.clone());
+    }
+}
+
+/// A clip source returning a fixed list (port of `fakeClipSource`).
+pub struct FakeClipSource {
+    pub clips: ClipList,
+}
+
+impl ClipSource for FakeClipSource {
+    fn list(&self) -> DeckResult<ClipList> {
+        Ok(self.clips.clone())
+    }
+}
+
+/// A probe that never detects a state (port of `noProbe`).
+pub struct NoProbe;
+
+impl StateProbe for NoProbe {
+    fn detect(&self, _w: &Window) -> Option<TransportState> {
+        None
+    }
+}
+
+/// A probe that always reports playing (port of `playingProbe`).
+pub struct PlayingProbe;
+
+impl StateProbe for PlayingProbe {
+    fn detect(&self, _w: &Window) -> Option<TransportState> {
+        Some(TransportState::Playing)
     }
 }
