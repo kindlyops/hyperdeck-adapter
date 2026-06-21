@@ -1375,6 +1375,7 @@ dependencies = [
  "hyperdeck-core",
  "hyperdeck-os",
  "log",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

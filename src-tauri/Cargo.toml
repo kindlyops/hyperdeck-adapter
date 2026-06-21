@@ -19,6 +19,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
+serde_json = "1" # required by tauri::generate_context!
 log = "0.4"
 hyperdeck-core = { path = "../crates/hyperdeck-core" }
 hyperdeck-os = { path = "../crates/hyperdeck-os" }

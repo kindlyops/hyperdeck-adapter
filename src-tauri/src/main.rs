@@ -3,7 +3,6 @@
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
