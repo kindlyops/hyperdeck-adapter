@@ -24,3 +24,8 @@ log = "0.4"
 dirs = "5"
 hyperdeck-core = { path = "../crates/hyperdeck-core" }
 hyperdeck-os = { path = "../crates/hyperdeck-os" }
+
+# AttachConsole for the CLI/headless modes (the tray app is a GUI-subsystem
+# binary; see the windows_subsystem attribute in main.rs).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_System_Console"] }

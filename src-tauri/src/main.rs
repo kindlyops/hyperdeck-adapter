@@ -1,5 +1,9 @@
-// Tray-only application: no console window on Windows release builds.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Tray-only application: never spawn a console window on Windows. This applies to
+// every profile (the `cargo tauri build --debug` bundle and `cargo tauri dev`
+// included), not just release — a debug-only guard let a console pop on test
+// builds. The CLI/headless modes reattach to the parent terminal (see
+// `attach_console`) so they still print when launched from a shell.
+#![windows_subsystem = "windows"]
 
 mod backend;
 
@@ -20,6 +24,7 @@ fn main() {
 
     // Verify / prompt for input permission, then exit (parity with the Go flag).
     if args.iter().any(|a| a == "--check-accessibility") {
+        attach_console();
         if hyperdeck_os::injector::request_accessibility() {
             println!("input permission granted");
             std::process::exit(0);
@@ -30,12 +35,32 @@ fn main() {
 
     // Headless mode: run the core with a logging presenter, no tray.
     if args.iter().any(|a| a == "--no-tray" || a == "--headless") {
+        attach_console();
         run_headless();
         return;
     }
 
     run_tray();
 }
+
+/// Reattach this process to the parent terminal's console on Windows. The binary is
+/// linked as a GUI-subsystem app (see the crate-level `windows_subsystem`
+/// attribute) so the tray build never pops a console window; the CLI/headless modes
+/// still want their stdout/stderr, so claim the parent console when one exists.
+/// Launched from Explorer / a shortcut there is no parent console and this is a
+/// harmless no-op. Non-Windows platforms inherit the terminal normally.
+#[cfg(windows)]
+fn attach_console() {
+    use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+    // Safe: AttachConsole has no preconditions and we ignore the result — failure
+    // (no parent console) just means there is nothing to print to.
+    unsafe {
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+#[cfg(not(windows))]
+fn attach_console() {}
 
 fn run_headless() {
     let presenter: Arc<dyn StatusPresenter + Send + Sync> = Arc::new(LogPresenter);
